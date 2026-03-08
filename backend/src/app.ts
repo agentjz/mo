@@ -26,7 +26,7 @@ app.get('/health', (_req, res) => {
     status: 'ok', 
     service: config.app.name,
     version: config.app.version,
-    项目: 'https://github.com/cheraljun/mo',
+    项目: 'https://github.com/agentjz/mo',
     邀请:'欢迎一起维护这个项目！'
   });
 });

@@ -57,7 +57,7 @@ A: 复制整个 userdata/ 文件夹即可
 
 技术支持
 
-- 项目主页: https://github.com/cheraljun/mo
+- 项目主页: https://github.com/agentjz/mo
 - 微信交流: 查看 wechat-qr.png 和 wechat-person.png
 - 欢迎提交问题和建议
 
