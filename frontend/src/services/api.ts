@@ -30,14 +30,15 @@ class APIService {
    */
   async request<T>(url: string, options: RequestInit = {}): Promise<T> {
     const token = this.getToken()
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-      ...options.headers,
+    const headers = new Headers(options.headers)
+
+    if (!headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json')
     }
 
     // 如果有token，添加Authorization头
     if (token) {
-      headers['Authorization'] = `Bearer ${token}`
+      headers.set('Authorization', `Bearer ${token}`)
     }
 
     const response = await fetch(`${this.baseURL}${url}`, {

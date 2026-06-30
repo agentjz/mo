@@ -32,14 +32,8 @@ const BottomEditPanel = forwardRef<BottomEditPanelRef, BottomEditPanelProps>(
     const visualPanelRef = useRef<NodeVisualPanelRef>(null);
 
   const getMergedData = useCallback(() => {
-    console.log('[BottomEditPanel] getMergedData 被调用');
-    console.log('[BottomEditPanel] 当前 node.data:', node.data);
-    
     const contentData = contentPanelRef.current?.applyChanges();
-    console.log('[BottomEditPanel] 上部数据:', contentData);
-    
     const visualData = visualPanelRef.current?.applyChanges();
-    console.log('[BottomEditPanel] 下部数据:', visualData);
     
     if (!contentData || !visualData) {
       console.error('[BottomEditPanel] 数据获取失败');
@@ -57,20 +51,14 @@ const BottomEditPanel = forwardRef<BottomEditPanelRef, BottomEditPanelProps>(
       }
     };
     
-    console.log('[BottomEditPanel] 合并后的数据:', mergedData);
     return mergedData;
   }, [node]);
 
   useImperativeHandle(ref, () => ({
-    applyChanges: () => {
-      console.log('[BottomEditPanel] applyChanges 被调用');
-      return getMergedData();
-    }
+    applyChanges: () => getMergedData()
   }), [getMergedData]);
 
     const handleClose = () => {
-      console.log('[BottomEditPanel] handleClose 被调用');
-      
       const mergedData = getMergedData();
       
       if (mergedData) {

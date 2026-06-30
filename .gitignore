@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+coverage/
+frontend/public/templates/*.html
+playwright-report/
+test-results/
+packager-win/temp/
+packager-win/output/
+
+# Runtime data
+userdata/
+logs/
+*.log
+
+# Local environment
+.env
+.env.*
+!.env.example
+!production.env.txt
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Archives and installers
+*.zip
+*.7z
+*.rar
+*.exe
+*.msi

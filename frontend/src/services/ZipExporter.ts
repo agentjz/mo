@@ -8,7 +8,7 @@
  */
 
 import JSZip from 'jszip';
-import type { Story, NodeImage } from '../types/index';
+import type { Story } from '../types/index';
 import config from '../config/index';
 import api from './api';
 

@@ -150,5 +150,5 @@ npm run test -- --coverage
 
 ---
 
-**详细文档**：查看 `howtotest.md`
+完整项目验证入口见根目录 `README.md` 和 `package.json`。
 

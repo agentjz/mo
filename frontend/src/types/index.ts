@@ -3,6 +3,8 @@
  * 职责：定义前后端通用的数据结构
  */
 
+import type { Edge as ReactFlowEdge, Node as ReactFlowNode } from 'reactflow';
+
 // ============= Blockly 类型 =============
 
 export * from './blockly.js';
@@ -65,35 +67,11 @@ export interface TextNodeData {
 
 export type NodeData = TextNodeData;
 
-export interface StoryNode {
-  id: string;
-  type: 'storyNode';
-  position: Position;
-  data: NodeData;
-}
+export type StoryNode = ReactFlowNode<NodeData>;
 
 // ============= 边类型 =============
 
-export interface StoryEdge {
-  id: string;
-  source: string;
-  target: string;
-  sourceHandle?: string | null;
-  targetHandle?: string | null;
-  type?: string;
-  animated?: boolean;
-  markerEnd?: {
-    type: any; // 兼容ReactFlow的MarkerType
-    width?: number;
-    height?: number;
-    color?: string;
-  };
-  style?: {
-    stroke?: string;
-    strokeWidth?: number;
-    strokeDasharray?: string;
-  };
-}
+export type StoryEdge = ReactFlowEdge;
 
 // ============= 故事元数据 =============
 

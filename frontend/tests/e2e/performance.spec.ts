@@ -136,7 +136,7 @@ test('性能测试2：同一节点上传5次图片 → 自动保存 → 刷新�
     
     // 上传图片
     const fileInput = page.locator('[data-testid="bottom-edit-panel"] input[type="file"]').first();
-    await fileInput.setInputFiles('../测试图片.jpg');
+    await fileInput.setInputFiles('tests/fixtures/test-image.jpg');
     await page.waitForTimeout(1500); // 等待上传完成
     
     // 如果不是最后一次，删除图片准备下一次上传

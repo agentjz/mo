@@ -32,7 +32,9 @@ export class PluginSystem {
       getAllNodes: () => [],
       getEdges: () => [],
       getCurrentNodeId: () => null,
-      moveTo: () => {}
+      moveTo: () => {
+        throw new Error('引擎尚未注入，无法跳转节点');
+      }
     };
   }
 

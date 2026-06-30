@@ -2,7 +2,7 @@
  * 自动保存功能 E2E 测试
  * 测试场景：
  * 1. 编辑节点 → 关闭面板 → 等待0.1秒 → 自动保存 → 刷新验证
- * 2. 编辑节点 → 关闭面板 → 0.05秒内刷新 → 数据丢失（未触发自动保存）
+ * 2. 编辑节点 → 关闭面板 → 快速刷新 → 数据仍保存
  * 3. 编辑节点 → 关闭面板 → 等待0.1秒 → 自动保存成功 → 刷新验证
  * 4. 连续编辑 → 防抖重置 → 最后一次编辑后0.1秒保存 → 刷新验证
  * 5. 节点面板打开 → 修改标题触发自动保存 → applyChanges被调用 → 刷新验证
@@ -80,8 +80,8 @@ test('场景1：编辑节点 → 关闭面板 → 等待0.1秒 → 自动保存 
   expect(savedText).toBe(testText);
 });
 
-// 场景2：编辑 → 关闭面板 → 0.05秒内刷新（不触发自动保存）
-test('场景2：编辑节点 → 关闭面板 → 0.05秒内刷新 → 数据丢失', async ({ page }) => {
+// 场景2：编辑 → 关闭面板 → 快速刷新仍应保存
+test('场景2：编辑节点 → 关闭面板 → 快速刷新 → 数据仍保存', async ({ page }) => {
   // 1. 点击节点
   await page.locator('.react-flow__node').first().click();
   await page.waitForSelector('[data-testid="bottom-edit-panel"]', { timeout: 10000 });
@@ -96,9 +96,9 @@ test('场景2：编辑节点 → 关闭面板 → 0.05秒内刷新 → 数据丢
   // 3. 关闭编辑面板（触发状态同步）
   await page.locator('[data-testid="bottom-edit-panel"] button').filter({ hasText: '关闭' }).click();
   await page.waitForTimeout(300);
-  console.log('已关闭面板，数据同步到内存，但只等待0.05秒就刷新...');
+  console.log('已关闭面板，快速刷新验证保存可靠性...');
   
-  // 4. 只等待50ms就刷新（不够0.1秒，不会触发自动保存）
+  // 4. 只等待50ms就刷新。关闭面板已经同步节点数据，保存链路不应依赖丢数据窗口。
   await page.waitForTimeout(50);
   
   // 5. 刷新页面
@@ -110,9 +110,9 @@ test('场景2：编辑节点 → 关闭面板 → 0.05秒内刷新 → 数据丢
   await page.locator('.react-flow__node').first().click();
   await page.waitForSelector('[data-testid="bottom-edit-panel"]', { timeout: 10000 });
   
-  // 7. 验证：数据应该丢失（因为没有保存到后端）
+  // 7. 验证：数据应该保存
   const afterReloadText = await page.locator('[data-testid="bottom-edit-panel"] textarea').first().inputValue();
-  expect(afterReloadText).not.toBe(testText);
+  expect(afterReloadText).toBe(testText);
 });
 
 // 场景3：编辑节点后关闭面板，等待自动保存 → 刷新验证
@@ -245,7 +245,7 @@ test('场景6：上传图片 → 关闭面板 → 等待0.1秒 → 自动保存 
   
   // 2. 上传图片（定位隐藏的 file input，路径相对于 frontend/ 目录）
   const fileInput = page.locator('[data-testid="bottom-edit-panel"] input[type="file"]').first();
-  await fileInput.setInputFiles('../测试图片.jpg');
+  await fileInput.setInputFiles('tests/fixtures/test-image.jpg');
   
   // 3. 等待上传完成
   await page.waitForTimeout(1000);

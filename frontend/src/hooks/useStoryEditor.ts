@@ -6,7 +6,7 @@
 import { useState, useCallback } from 'react';
 import { useNodesState, useEdgesState, addEdge, MarkerType } from 'reactflow';
 import type { Connection } from 'reactflow';
-import type { StoryNode, StoryEdge, StoryMeta, Choice, TextNodeData, VariableDefinition } from '../types/index.ts';
+import type { StoryNode, StoryEdge, StoryMeta, Choice, TextNodeData, NodeData, VariableDefinition } from '../types/index.ts';
 import config from '../config/index.ts';
 import { useHistory } from './useHistory.ts';
 
@@ -19,8 +19,8 @@ const DEFAULT_META: StoryMeta = {
 };
 
 export function useStoryEditor() {
-  const [nodes, setNodes, onNodesChange] = useNodesState<StoryNode>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<StoryEdge>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<NodeData>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState<StoryNode | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<StoryEdge | null>(null);
   const [storyMeta, setStoryMeta] = useState<StoryMeta>(DEFAULT_META);
@@ -29,8 +29,8 @@ export function useStoryEditor() {
   const history = useHistory();
 
   const loadStoryData = useCallback((nodes: StoryNode[], edges: StoryEdge[], meta: StoryMeta, vars?: VariableDefinition[]) => {
-    setNodes(nodes as any);
-    setEdges(edges as any);
+    setNodes(nodes);
+    setEdges(edges);
     setStoryMeta(meta);
     setVariables(vars || []);
   }, [setNodes, setEdges]);
@@ -52,10 +52,10 @@ export function useStoryEditor() {
           height: edgeConfig.markerHeight,
           color: edgeConfig.color
         },
-        style: { 
+      style: { 
           stroke: edgeConfig.color, 
           strokeWidth: edgeConfig.width
-        } as any
+        }
       };
       setEdges((eds) => addEdge(edge, eds));
     },
@@ -92,7 +92,7 @@ export function useStoryEditor() {
         nodeType: 'normal'
       } as TextNodeData,
     };
-    setNodes((nds) => [...nds, newNode as any]);
+    setNodes((nds) => [...nds, newNode]);
   }, [nodes, setNodes]);
 
   const deleteNode = useCallback(() => {
@@ -118,7 +118,7 @@ export function useStoryEditor() {
           
           // 如果是当前选中的节点，同步更新 selectedNode
           if (selectedNode && selectedNode.id === nodeId) {
-            setSelectedNode(updatedNode as any);
+            setSelectedNode(updatedNode);
           }
           
           return updatedNode;
@@ -160,8 +160,8 @@ export function useStoryEditor() {
   const handleUndo = useCallback(() => {
     const snapshot = history.undo(nodes, edges);
     if (snapshot) {
-      setNodes(snapshot.nodes as any);
-      setEdges(snapshot.edges as any);
+      setNodes(snapshot.nodes);
+      setEdges(snapshot.edges);
       setSelectedNode(null);
     }
   }, [history, nodes, edges, setNodes, setEdges]);
@@ -169,8 +169,8 @@ export function useStoryEditor() {
   const handleRedo = useCallback(() => {
     const snapshot = history.redo(nodes, edges);
     if (snapshot) {
-      setNodes(snapshot.nodes as any);
-      setEdges(snapshot.edges as any);
+      setNodes(snapshot.nodes);
+      setEdges(snapshot.edges);
       setSelectedNode(null);
     }
   }, [history, nodes, edges, setNodes, setEdges]);

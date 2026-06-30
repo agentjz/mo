@@ -1,0 +1,20 @@
+{
+  "name": "mo-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "墨水互动叙事游戏编辑器工作区",
+  "license": "MIT",
+  "scripts": {
+    "install:all": "npm.cmd --prefix frontend install && npm.cmd --prefix backend install && npm.cmd --prefix player-standalone install && npm.cmd --prefix player-standalone/visual-novel install && npm.cmd --prefix packager-win install",
+    "dev:frontend": "npm.cmd run build:player && npm.cmd --prefix frontend run dev",
+    "dev:backend": "npm.cmd --prefix backend run dev",
+    "build:frontend": "npm.cmd run build:player && npm.cmd --prefix frontend run build",
+    "build:backend": "npm.cmd --prefix backend run build",
+    "build:player": "npm.cmd --prefix player-standalone run build",
+    "build:desktop": "npm.cmd --prefix packager-win run build",
+    "test:unit": "npm.cmd --prefix frontend run test:run",
+    "test:e2e": "npm.cmd --prefix frontend run test:e2e",
+    "typecheck": "npm.cmd --prefix frontend run type-check && npm.cmd --prefix backend run build",
+    "verify": "npm.cmd run typecheck && npm.cmd run test:unit && npm.cmd run build:frontend"
+  }
+}

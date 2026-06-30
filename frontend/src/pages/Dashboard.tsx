@@ -304,7 +304,6 @@ function Dashboard(): JSX.Element {
           // 获取插件的CSS（如果有getCSS方法）
           if (typeof (pluginInstance as any).getCSS === 'function') {
             customStyleCSS = (pluginInstance as any).getCSS()
-            console.log(`[Export] Using style plugin: ${pluginInstance.metadata.id}`)
             break
           }
         }

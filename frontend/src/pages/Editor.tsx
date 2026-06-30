@@ -146,17 +146,31 @@ function Editor(): JSX.Element {
     
     setSaving(true);
     
-    // 如果编辑面板打开，先更新内存，再保存
+    let nodesForSave = editor.nodes;
+
+    // 如果编辑面板打开，先生成包含面板数据的本地快照，再保存。
     if (editor.selectedNode && nodeEditPanelRef.current) {
       const editingNodeData = nodeEditPanelRef.current.applyChanges();
       if (editingNodeData) {
-        // 立即更新内存状态
         editor.updateNodeData(editor.selectedNode.id, editingNodeData);
+        nodesForSave = editor.nodes.map(node => {
+          if (node.id !== editor.selectedNode!.id) {
+            return node;
+          }
+
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              ...editingNodeData
+            }
+          };
+        });
       }
     }
     
     // 清洗数据：只保留需要保存的字段
-    const currentNodes = editor.nodes.map(node => ({
+    const currentNodes = nodesForSave.map(node => ({
       id: node.id,
       type: 'storyNode' as const,
       position: node.position,
@@ -295,27 +309,14 @@ function Editor(): JSX.Element {
     // 初始加载时不触发
     if (loading || !hasUnsavedChanges) return;
     
-    console.log('[自动保存] 检测到变化，0.1秒后保存');
-    
     // 设置0.1秒防抖定时器
     const timer = setTimeout(async () => {
       if (!handleSaveRef.current) return;
       
-      console.log('[自动保存] 开始保存...');
       autoSavingRef.current = true; // 加锁
       
       try {
-        // 第一次保存
-        const result1 = await handleSaveRef.current(false, true);
-        console.log('[自动保存] 第1次:', result1);
-        
-        // 第二次保存（基于信号等待）
-        const result2 = await handleSaveRef.current(false, true);
-        console.log('[自动保存] 第2次:', result2);
-        
-        if (result1 && result2) {
-          console.log('[自动保存] 保存完成 ✓');
-        }
+        await handleSaveRef.current(false, true);
       } catch (error) {
         console.error('[自动保存] 保存失败:', error);
       } finally {

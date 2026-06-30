@@ -100,15 +100,6 @@ const NodeVisualPanel = forwardRef<NodeVisualPanelRef, NodeVisualPanelProps>(
   // 暴露 applyChanges 方法给父组件，点保存时调用
   useImperativeHandle(ref, () => ({
     applyChanges: () => {
-      console.log('[NodeVisualPanel] applyChanges 被调用');
-      console.log('[NodeVisualPanel] 当前 nodeImage:', nodeImage);
-      console.log('[NodeVisualPanel] 当前 characterImages:', characterImages);
-      console.log('[NodeVisualPanel] 当前 hotspots:', hotspots);
-      console.log('[NodeVisualPanel] 当前对话框配置:', { 
-        dialogBoxPosition, dialogBoxHeight, dialogBoxWidth, dialogBoxOpacity,
-        dialogBoxPadding, dialogBoxRadius, dialogBoxBlur, dialogBoxFontSize
-      });
-      
       // 只返回右侧面板负责的字段
       const updatedData: Partial<StoryNode['data']> = {
         image: nodeImage,
@@ -128,7 +119,6 @@ const NodeVisualPanel = forwardRef<NodeVisualPanelRef, NodeVisualPanelProps>(
         }
       } as any;
       
-      console.log('[NodeVisualPanel] 返回的数据:', updatedData);
       return updatedData;
     }
   }), [node.id, onUpdate, nodeImage, characterImages, hotspots, 

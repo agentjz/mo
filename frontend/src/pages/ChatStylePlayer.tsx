@@ -11,7 +11,6 @@ import config from '../config/index.ts';
 import { initializeBlockly } from '../utils/blocklyInit.ts';
 import { usePluginSystem } from '../contexts/PluginContext.tsx';
 import ChatGameMenu from '../components/ChatGameMenu.tsx';
-import StartScreen from '../components/StartScreen.tsx';
 import '../styles/chat-style-player.css';
 import '../styles/game-menu.css';
 import '../styles/start-screen.css';

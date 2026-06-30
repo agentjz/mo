@@ -42,7 +42,6 @@ function VisualNovelPlayer({ story }: Props): JSX.Element {
   const [currentChoices, setCurrentChoices] = useState<ChoiceWithTarget[]>([]);
   const [gameEnded, setGameEnded] = useState<boolean>(false);
   const [hotspots, setHotspots] = useState<Hotspot[]>([]);
-  const [currentNodeId, setCurrentNodeId] = useState<string>('');
   const [typewriterSpeed, setTypewriterSpeed] = useState<number>(0);
   const [showGameMenu, setShowGameMenu] = useState<boolean>(false);
   const [gameStarted, setGameStarted] = useState<boolean>(false);
@@ -175,7 +174,6 @@ function VisualNovelPlayer({ story }: Props): JSX.Element {
           fontSize: uiConfig.dialogBoxFontSize || 18
         });
         
-        setCurrentNodeId(node.id);
         setGameEnded(node.type === 'ending');
       },
       onChoicesChange: (choices) => {

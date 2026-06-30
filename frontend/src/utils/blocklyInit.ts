@@ -1,17 +1,14 @@
 /**
- * Blockly 完整初始化工�?
- * 职责：注�?Blockly 所有内置积木块 + 自定义积木块
+ * Blockly 完整初始化工具
+ * 职责：注册 Blockly 内置积木块、自定义积木块和工具箱配置
  */
 
 import * as Blockly from 'blockly';
 
-// 导入 Blockly 所有内�?blocks（会自动注册�?Blockly.Blocks�?
+// 导入 Blockly 内置 blocks，会自动注册到 Blockly.Blocks。
 import 'blockly/blocks';
 
-// 导入所�?JavaScript 代码生成器（会自动注册到 javascriptGenerator�?
-import { javascriptGenerator } from 'blockly/javascript';
-
-// 导入中文语言�?
+// 导入中文语言包。
 import * as ZhHans from 'blockly/msg/zh-hans';
 
 import type { PluginSystem } from '../plugin/PluginSystem';
@@ -25,10 +22,10 @@ import {
 let isInitialized = false;
 
 /**
- * 初始�?Blockly - 包含所有内置功�?+ 自定义积木块
- * 只需要调用一�?
+ * 初始化 Blockly。
+ * 只需要调用一次。
  * 
- * @param pluginSystem - 插件系统实例（必须）。通过钩子收集所有插件的积木定义
+ * @param pluginSystem - 插件系统实例。通过钩子收集所有插件的积木定义。
  */
 export function initializeBlockly(pluginSystem: PluginSystem): void {
   if (isInitialized) {
@@ -41,15 +38,15 @@ export function initializeBlockly(pluginSystem: PluginSystem): void {
   // ============= 0. 设置中文语言 =============
   Blockly.setLocale(ZhHans as any);
 
-  // ============= 1. 注册 Blockly 所有内�?blocks =============
-  // 这些 blocks 已经�?NPM 包中，直接引用即�?
-  // 包括：logic, loops, math, text, lists, variables, procedures �?
+  // ============= 1. 注册 Blockly 所有内置 blocks =============
+  // 这些 blocks 来自 NPM 包，直接引用即可。
+  // 包括 logic、loops、math、text、lists、variables、procedures 等。
   
   // Blockly.Blocks 会自动包含所有内置块定义
   // 我们只需要确保导入了 blocks 模块
   console.log('[Blockly] Loading all built-in blocks (中文)...');
   
-  // 验证内置块是否加�?
+  // 记录当前使用的内置块类型。
   const builtinBlockTypes = [
     // Logic blocks
     'controls_if', 'controls_ifelse', 'logic_compare', 'logic_operation', 
@@ -88,23 +85,23 @@ export function initializeBlockly(pluginSystem: PluginSystem): void {
 
   console.log(`[Blockly] Built-in blocks available: ${builtinBlockTypes.length} types`);
 
-  // ============= 2. 注册自定义积木块（互动小说专�?+ 游戏模组�?============
+  // ============= 2. 注册自定义积木块（互动小说专用 + 游戏模组）============
   console.log('[Blockly] Step 2: Collecting custom blocks from plugins...');
   
-  // 通过钩子收集所有插件的积木块定�?
+  // 通过钩子收集所有插件的积木块定义。
   const allCustomBlocks: any[] = pluginSystem.trigger('blockly:register-blocks', []);
   console.log(`[Blockly] Collected ${allCustomBlocks.length} custom blocks`);
   
-  // 通过钩子收集所有插件的代码生成�?
+  // 通过钩子收集所有插件的代码生成器。
   const allCustomGenerators: Record<string, any> = pluginSystem.trigger('blockly:register-generators', {});
   console.log(`[Blockly] Collected ${Object.keys(allCustomGenerators).length} code generators`);
   
-  // 批量注册积木�?
+  // 批量注册积木块。
   console.log('[Blockly] Registering blocks to Blockly.Blocks...');
   registerCustomBlocks(allCustomBlocks);
   console.log(`[Blockly]   Registered ${allCustomBlocks.length} blocks`);
 
-  // ============= 3. 注册代码生成�?=============
+  // ============= 3. 注册代码生成器 =============
   console.log('[Blockly] Step 3: Registering code generators...');
   registerCodeGenerators(allCustomGenerators);
   console.log(`[Blockly]   Registered ${Object.keys(allCustomGenerators).length} generators`);
@@ -124,12 +121,12 @@ export function initializeBlockly(pluginSystem: PluginSystem): void {
 
 /**
  * 创建完整的工具箱配置
- * 包含 Blockly 所有内置类�?+ 插件动态注册的类别
+ * 包含 Blockly 所有内置类别和插件动态注册的类别。
  * 
- * @param pluginSystem - 插件系统实例，用于收集插件提供的工具箱类�?
+ * @param pluginSystem - 插件系统实例，用于收集插件提供的工具箱类别。
  */
 export function createCustomToolbox(pluginSystem: PluginSystem) {
-  // 通过钩子收集所有插件提供的工具箱类�?
+  // 通过钩子收集所有插件提供的工具箱类别。
   const pluginCategories = pluginSystem.trigger('blockly:register-toolbox-categories', []);
   console.log(`[Blockly] Collected ${pluginCategories.length} plugin toolbox categories`);
   
@@ -236,9 +233,9 @@ export function createCustomToolbox(pluginSystem: PluginSystem) {
         ]
       },
 
-      // 变量类别（仅使用左侧栏管理的全局变量�?
-      // 禁用 Blockly 内置的变量管�?UI（创�?重命�?删除�?
-      // 用户只能使用侧边栏预定义的变量，确保单向数据�?
+      // 变量类别仅使用侧边栏管理的全局变量。
+      // 禁用 Blockly 内置变量管理 UI，用户只能使用侧边栏预定义的变量。
+      // 这样可以确保单向数据流。
       {
         kind: 'category',
         name: '故事变量',

@@ -54,7 +54,7 @@ Q: 如何测试打包结果？
 A: 解压 output/ 里的 ZIP，双击启动脚本测试
 
 Q: 如何清理打包文件？
-A: 在项目根目录运行 python rm.py
+A: 删除 packager-win/temp 和 packager-win/output 后重新运行 npm run build。
    会自动清理所有构建产物和 packager-win 的临时文件
 
 

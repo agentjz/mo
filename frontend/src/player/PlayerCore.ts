@@ -132,8 +132,9 @@ export class PlayerCore {
         getAllNodes: () => this.engine!.getAllNodes(),
         getEdges: () => this.engine!.getEdges(),
         getCurrentNodeId: () => this.engine!.getCurrentNodeId(),
-        moveTo: (_nodeId: string) => {
-          console.warn('[PlayerCore] moveTo not fully implemented');
+        moveTo: (nodeId: string) => {
+          const nextNode = this.engine!.jumpToNode(nodeId);
+          this.displayNode(nextNode);
         }
       }
     });
@@ -263,7 +264,7 @@ export class PlayerCore {
     if (!this.engine) return;
     
     try {
-      const nextNode = (this.engine as any).jumpToNode(targetNodeId);
+      const nextNode = this.engine.jumpToNode(targetNodeId);
       this.displayNode(nextNode);
     } catch (error) {
       console.error('跳转失败:', error);

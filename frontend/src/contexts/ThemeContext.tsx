@@ -14,12 +14,7 @@ interface ThemeContextType {
   switchTheme: (themeId: string) => Promise<void>;
 }
 
-const ThemeContext = createContext<ThemeContextType>({
-  themeManager: null,
-  currentTheme: null,
-  availableThemes: [],
-  switchTheme: async () => {}
-});
+const ThemeContext = createContext<ThemeContextType | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const pluginSystem = usePluginSystem();
