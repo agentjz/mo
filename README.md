@@ -2,11 +2,12 @@
 
 > 为空间叙事游戏而生
 
+**在线使用：** [https://luckymaomi.github.io/mo/](https://luckymaomi.github.io/mo/)
+
 [![React](https://img.shields.io/badge/React-18.2.0-00D8FF?style=plastic&logo=react&logoColor=00D8FF&labelColor=282c34)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3.3-3178C6?style=plastic&logo=typescript&logoColor=white&labelColor=0F1419)](https://www.typescriptlang.org/)
 [![React Flow](https://img.shields.io/badge/React_Flow-11.10.4-FF6B6B?style=plastic&logoColor=white&labelColor=2D2D2D)](https://reactflow.dev/)
 [![Blockly](https://img.shields.io/badge/Blockly-11.1.1-4AB8FF?style=plastic&logoColor=white&labelColor=1A1A1A)](https://developers.google.com/blockly)
-[![Express](https://img.shields.io/badge/Express-Backend-FFFFFF?style=plastic&logo=express&logoColor=white&labelColor=000000)](https://expressjs.com/)
 ![License](https://img.shields.io/badge/License-MIT-00C853?style=plastic&logoColor=white&labelColor=1B5E20)
 
 ## 这是什么
@@ -31,8 +32,6 @@
 
 **单文件导出** - 生成独立 HTML 文件，无需服务器，双击即可游玩。
 
-**Windows 便携版** - 打包成可分发的桌面版压缩包。
-
 ## 适合创作什么
 
 如果你想做的游戏核心是探索未知空间、在压力下做选择、用文字和氛围推动情绪，那么墨水就是为这种作品准备的。
@@ -52,47 +51,11 @@
 
 故事就这样开始了。
 
-## 项目结构
-
-```text
-frontend/           编辑器、在线播放器和插件系统
-backend/            Express API、认证、故事数据和图片持久化
-player-standalone/  独立播放器模板构建
-packager-win/       Windows 便携版打包工具
-```
-
-当前结构保持直接命名：`frontend`、`backend`、`player-standalone`、`packager-win`。这些名字对应真实职责，今天不做无收益的大迁移。
-
-## 快速开始
-
-安装全部依赖：
+## 本地使用
 
 ```powershell
-npm.cmd run install:all
-```
-
-启动前端：
-
-```powershell
-npm.cmd run dev:frontend
-```
-
-启动后端：
-
-```powershell
-npm.cmd run dev:backend
-```
-
-完整验证：
-
-```powershell
-npm.cmd run verify
-```
-
-Windows 便携版打包：
-
-```powershell
-npm.cmd run build:desktop
+npm.cmd install
+npm.cmd run start
 ```
 
 ## 文档

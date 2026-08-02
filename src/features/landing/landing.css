@@ -1,0 +1,194 @@
+.landing-twine {
+  min-height: 100vh;
+  background-image: url('../../assets/background.webp');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  padding: 80px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.landing-twine-container {
+  max-width: 900px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.landing-twine-logo {
+  margin-bottom: 36px;
+}
+
+.logo-text {
+  margin: 0;
+  font-size: 56px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 4px;
+}
+
+.landing-twine-description {
+  max-width: 700px;
+  margin: 0 auto 36px;
+  text-align: left;
+}
+
+.landing-twine-description p {
+  margin: 12px 0;
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+.landing-twine-description strong {
+  color: #fde68a;
+  font-weight: 700;
+}
+
+.landing-twine-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.twine-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 32px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #FF6D5A 0%, #FF9472 100%);
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.twine-button-primary,
+.twine-button-secondary,
+.twine-button-tertiary {
+  background: linear-gradient(135deg, #FF6D5A 0%, #FF9472 100%);
+  color: #ffffff;
+}
+
+.landing-twine-version {
+  margin: 32px 0 0;
+  color: #ffffff;
+  font-size: 16px;
+}
+
+.landing-twine-version strong {
+  color: #fde68a;
+  font-weight: 700;
+}
+
+.qr-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+}
+
+.qr-modal-content {
+  position: relative;
+  max-width: 400px;
+  padding: 40px;
+  border-radius: 16px;
+  background: #ffffff;
+  text-align: center;
+}
+
+.qr-modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 32px;
+  line-height: 1;
+  transition: all 0.2s;
+}
+
+.qr-modal-close:hover {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.qr-modal-title {
+  margin: 0 0 8px;
+  color: #1f2937;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.qr-modal-subtitle {
+  margin: 0 0 24px;
+  color: #64748b;
+  font-size: 16px;
+}
+
+.qr-modal-image {
+  width: 280px;
+  height: 280px;
+  border: 2px solid #f1f5f9;
+  border-radius: 8px;
+}
+
+@media (max-width: 768px) {
+  .landing-twine {
+    padding: 60px 20px;
+  }
+
+  .logo-text {
+    font-size: 36px;
+    letter-spacing: 2px;
+  }
+
+  .landing-twine-description {
+    max-width: 100%;
+    text-align: center;
+  }
+
+  .landing-twine-description p {
+    font-size: 18px;
+  }
+
+  .landing-twine-buttons {
+    width: 100%;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .twine-button {
+    width: 100%;
+  }
+
+  .qr-modal-content {
+    padding: 32px 24px;
+    margin: 0 16px;
+  }
+
+  .qr-modal-image {
+    width: 240px;
+    height: 240px;
+  }
+}

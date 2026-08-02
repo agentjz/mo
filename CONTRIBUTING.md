@@ -5,45 +5,53 @@
 - `AGENTS.md`
 - `spec.md`
 - `plan.md`
-- `.codex/skills/mo-development/SKILL.md`
-- `.codex/skills/plan/SKILL.md`
+- `plan.example.md`
+- `.agents/skills/mo-development/SKILL.md`
+- `.agents/skills/plan/SKILL.md`
 
 ## 工作流程
 
-- 中大型改动先更新 `plan.md`。
-- 写完计划，再动手。
-- 新事实推翻计划，先改计划，再继续。
-- 不把未实现能力写成当前产品事实。
-- 不新增假接口、空实现、兼容转发或旧语义包装。
-- 不提交真实用户数据、密钥、构建产物或打包输出。
-- 不接入第三方引擎或库而不记录许可证边界。
+- 中大型改动先更新 `plan.md`，再实现并随进度维护 checklist。
+- 新事实推翻计划时先改计划，不用口头说明代替计划更新。
+- 当前代码只服务当前实现，不新增兼容转发、旧别名、历史语义包装或空接口。
+- 下层模块不得反向依赖页面、组件、Context 或组合根。
+- 不提交真实作品、图片、浏览器数据、密钥、日志、构建和测试产物。
+- 保留页面的可见文案和视觉变化必须有明确产品依据。
+
+## 本地运行
+
+```powershell
+npm.cmd install
+npm.cmd run start
+```
+
+`npm.cmd run start` 是 owner 保留的本地构建与 `/mo/` 预览入口。开发热更新使用：
+
+```powershell
+npm.cmd run dev
+```
 
 ## 验证
 
-安装依赖：
+日常门禁：
 
-```text
-npm.cmd run install:all
-```
-
-完整验证：
-
-```text
+```powershell
 npm.cmd run verify
 ```
 
-涉及 E2E 时，按 `frontend/playwright.config.ts` 启动前后端并运行：
+浏览器和常规压力是独立验收，不得加入日常门禁：
 
-```text
+```powershell
 npm.cmd run test:e2e
+npm.cmd run test:stress
+```
+
+浏览器链路和性能边界的人工全量验收使用：
+
+```powershell
+npm.cmd run verify:full
 ```
 
 ## 交付标准
 
-接到明确问题后，把 research、设计、实现、测试、文档同步和验证收成一个完整交付。
-
-不交半成品。
-
-把“顶尖标准”翻成可验收的终局，不写成“继续优化”。
-
-把任务定成生产级封顶验收，不写成后续优化或逐步改进。
+把 research、设计、实现、测试、文档同步和验证收成一次完整交付。明确记录真实命令、结果、未验证内容和剩余风险。commit 或 push 前必须得到 owner 当前明确授权。

@@ -4,158 +4,119 @@
 
 ## 产品定位
 
-墨水是互动叙事游戏编辑器，服务于空间探索、视觉小说、分支剧情和多结局叙事创作。
+墨水是纯前端、本地优先的桌面浏览器互动叙事游戏编辑器，服务于空间探索、视觉小说、分支剧情和多结局叙事创作。
 
-它解决四个问题：
+创作者使用节点流组织故事，通过图片热区构建空间探索，通过变量和 Blockly 脚本驱动条件分支，并把作品导出为可独立运行的 HTML。
 
-- 创作者想用节点流看清故事结构。
-- 创作者想用图片、热区、变量和条件分支组织可探索场景。
-- 创作者想预览和发布可游玩的视觉小说式作品。
-- 创作者想导出不依赖服务器的独立 HTML，或打包成 Windows 便携版。
+## 产品边界
+
+- 不需要账号、邮箱、登录、服务器 API 或云端作品库。
+- 不提供云同步、公开发布、固定分享链接或 Windows 便携包。
+- 发布等同于导出；作品发布由创作者自行分发导出文件完成。
+- 编辑器只面向桌面浏览器，不承诺移动端编辑体验。
+- 不迁移服务器数据，不兼容本次断裂式重构前的文件格式。
+- `start_index.py` 和 `npm.cmd run start` 是 owner 保留的本地构建与预览入口，不是生产运行时依赖。
 
 ## 当前事实
 
-- `frontend/` 是 React + Vite + TypeScript 编辑器、播放器和插件系统。
-- `backend/` 是 Express + TypeScript API，负责认证、作者数据、故事草稿、图片和持久化。
-- `player-standalone/` 构建独立播放器模板，用于 HTML 导出。
-- `packager-win/` 构建 Windows 便携版，包含 Node.js 便携运行时、后端、前端、播放器和启动器。
-- 当前前端核心库包含 React Flow、Blockly、JSZip、marked。
-- 当前后端使用 JWT、bcryptjs、nodemailer、文件系统仓储和原子写入。
-- 当前测试包含前端 Vitest 单元测试和 Playwright E2E 测试；E2E 使用 Chromium 有头模式打开真实浏览器。
-- 当前完整验证命令是 `npm.cmd run verify`。
+- 仓库根目录是唯一 npm 包和唯一 React + Vite + TypeScript 应用。
+- 生产 base 固定为 `/mo/`，路由使用 HashRouter，目标地址是 `https://luckymaomi.github.io/mo/`。
+- `master` 分支由 GitHub Actions 执行日常门禁并部署 `dist/` 到 GitHub Pages。
+- 作品、图片资源、设置和插件配置保存在浏览器 IndexedDB 数据库 `mo-workspace`。
+- 首次初始化在同一事务中创建两份示例作品和初始化标记，刷新不会重复创建。
+- Service Worker 预缓存应用壳和构建资源；首次成功加载后可离线打开作品库。
+- 应用支持视觉小说和聊天两种播放器；网页预览和独立 HTML 共用同一套播放器源码。
+- 首页和声明页的静态文案集中在 `src/content/` 类型化数据模块中，页面不运行时加载 Markdown。
+- 当前核心依赖包含 React、React Flow、Blockly、JSZip、marked、idb 和 Zod。
 
 ## 用户路径
 
 ### 创作故事
 
-用户进入编辑器，创建故事，添加节点、选项和连接线。节点流展示故事结构，用户可以编辑文本、节点类型、选项、标签、打字机速度、背景图、角色立绘、热区和节点脚本。
+用户进入本地作品库，创建作品，添加节点、选项和连接线。节点流展示故事结构，用户可以编辑文本、节点类型、选项、标签、打字机速度、背景图、角色立绘、热区和节点脚本。
+
+编辑器持续自动保存。路由返回前会刷新待保存数据；脏状态或写入进行中关闭页面时使用浏览器原生提示。
 
 ### 空间探索
 
-用户在节点图片上绘制矩形热区，配置热区名称和目标节点。播放器渲染热区覆盖层，点击热区后直接跳转到目标节点。
+用户在节点图片上绘制矩形热区，配置热区名称和目标节点。播放器渲染透明热区覆盖层，点击后直接跳转到目标节点。
 
 ### 变量和条件
 
-用户定义变量，设置默认值和显示规则。播放器启动时把 `story.variables` 初始化到 RuntimePlugin。模板只能读取变量；Blockly 脚本通过 RuntimePlugin 注册函数修改变量。
+用户定义变量、默认值和播放器显示规则。播放器启动时由 RuntimePlugin 初始化运行时变量。模板只读变量；Blockly 脚本通过注册函数修改变量。
 
 ### 插件和游戏模组
 
-插件通过 Hook、Event 和 Data Store 扩展编辑器与播放器。游戏模组把 Blockly 积木定义、代码生成器、变量定义和运行时逻辑拆开，保证编辑器、播放器和导出 HTML 都能复用。
+插件商店展示静态打包的内建插件，支持搜索、分类、启停、主题切换、健康状态和配置持久化。当前不支持联网安装、远程代码加载或第三方插件市场。
 
-### 保存和发布
+### 预览与导出
 
-编辑器使用防抖式自动保存，用户停止编辑后保存当前故事。后端以文件系统仓储持久化草稿、发布作品和图片。独立 HTML 导出生成可双击运行的作品文件。
+用户可以直接预览作品，也可以导出单作品 JSON、含引用图片的 ZIP 或独立 HTML。独立 HTML 内联播放器、作品和资源，不依赖墨水服务器。
 
-### Windows 便携版
-
-打包工具构建前端、后端和播放器，下载 Node.js 便携版，生成启动器和 ZIP 包。用户解压后双击启动脚本即可打开编辑器。
+作品库可以整体导出为 ZIP 备份；恢复时先完整解码和校验，再在单个 IndexedDB 事务中替换当前作品库。
 
 ## 架构边界
 
-### 前端分层
-
-- Engine 层：节点跳转、选择、历史、存档和事件，不包含变量、条件、模板或业务逻辑。
-- Plugin 层：通过 Hook、Event、Data Store 扩展功能。
-- UI 层：React 组件，只负责呈现和交互。
-
-### 后端分层
-
-- Service 层：业务逻辑，不关心数据来源。
-- Repository 层：数据访问，封装文件系统存储。
-- Infrastructure 层：原子写入、邮件发送、图片处理等基础设施。
-
-依赖方向：
+源码依赖方向：
 
 ```text
-UI -> PluginSystem -> CoreEngine
-Service -> Repository -> Infrastructure
+domain -> application -> platform -> UI -> composition root
 ```
 
-依赖只能单向。下层不知道上层存在。
+- Domain：Story schema、文件格式、模板和纯规则。
+- Application：作品库用例和编辑保存协调，不直接渲染 UI。
+- Platform：IndexedDB、资源 URL、写锁、广播和导出适配器。
+- Plugin：类型化 Hook、Event、Data Store 和贡献注册表。
+- Engine：只管理节点跳转、选择、历史、存档和事件。
+- UI：React 页面和组件，只通过应用服务或类型化贡献端口访问能力。
+- Composition root：初始化存储、插件、主题、路由和离线注册。
 
-## 保存逻辑
+下层不得反向依赖页面、组件、Context 或组合根。
 
-保存逻辑遵循傻瓜式、零陷阱原则。
+## 本地存储
 
-- 监听 `editor.nodes`、`editor.edges`、`editor.storyMeta`、`editor.variables`。
-- 用户停止编辑后通过防抖定时器触发保存。
-- 保存前先收集编辑面板数据，再更新内存状态，再从单一数据源读取。
-- `editor.nodes` 和 `editor.edges` 是保存时的唯一真相来源。
-- 使用锁避免自动保存重入。
-- 后端写入使用临时文件加原子重命名，崩溃不损坏原文件。
+IndexedDB 包含：
 
-## 变量系统
+- `stories`：作品、revision、创建时间和更新时间。
+- `assets`：按内容哈希标识的 Blob、MIME、尺寸、文件名和大小。
+- `settings`：初始化标记、插件配置和其他应用设置。
 
-变量是单向数据流：
+图片引用在 Story 中保存稳定资源 ID。`AssetUrlRegistry` 统一创建和撤销 object URL。删除作品后按全库引用回收孤立资源。
 
-```text
-定义 -> 初始化 -> 读取 -> 修改 -> 保存
-```
+导入先解码、严格校验、核对资源哈希和容量，再提交事务。失败不得留下半份作品、缺失资源或部分恢复结果。
 
-- 变量定义保存在 `story.variables`。
-- 播放器启动时 RuntimePlugin 根据变量定义初始化运行时变量。
-- 模板语法读取变量，例如 `{{$vars.health}}`。
-- Blockly 脚本通过 `fns.setVar`、`fns.addTime` 等注册函数修改运行时变量。
-- 模板只读，不允许修改变量。
-- 禁止绕过 RuntimePlugin 直接修改运行时变量。
+## 保存与并发
 
-## 图片热区
+每个编辑页由保存协调器串行处理防抖写入，保存时携带期望 revision。仓储只在 revision 一致时更新并递增版本，旧版本不能覆盖新版本。
 
-热区是图片上的可点击矩形区域：
+同一作品使用 Web Locks 获取独占编辑权。未获得锁的标签以只读方式打开。BroadcastChannel 广播更高 revision；存在本地脏状态的写标签收到外部更新时停止保存并显示冲突错误。
 
-- 数据保存在节点 `pluginData['image-hotspots']`。
-- 热区包含 `id`、`label`、`targetNodeId` 和矩形坐标。
-- 编辑器在 NodeVisualPanel 中绘制和管理热区。
-- 播放器把热区渲染为图片覆盖层。
-- 热区跳转使用直接节点跳转，不依赖 edge。
+## 文件格式
 
-热区适用于房间调查、地图导航、迷宫方向、Backrooms 门和通道等空间探索场景。
+当前格式均带 `format` 和 `version`，只服务当前实现：
 
-## 插件系统
+- JSON：单作品结构化数据。
+- ZIP：manifest、作品和全部引用资源。
+- 整库备份：manifest、全部作品、资源和设置。
+- HTML：单文件播放器、作品和 data URL 资源。
 
-插件通过以下机制扩展产品：
+导入使用 Zod 和文件边界限制校验格式、资源数量、单文件大小、总大小、MIME 和哈希。当前格式不提供旧格式兼容层。
 
-- 同步数据转换钩子：`content:process`、`choice:filter`、`content:render`。
-- 异步事件通知：`node:before-enter`、`node:after-enter`、`choice:select`。
-- Blockly 扩展钩子：注册积木块、代码生成器和工具箱分类。
-- 插件数据钩子：提供预定义变量和使用文档。
+## 插件平台
 
-插件注册流程：
+`PluginSystem` 是插件注册状态、Hook、Event、Data Store、贡献和健康状态的唯一 owner。
 
-```text
-register -> install -> enable
-```
+插件 manifest 声明 id、版本、分类、依赖、冲突、默认启用状态和兼容目标。注册、启用和禁用先校验依赖与冲突；激活失败清理该插件拥有的 Hook、事件和贡献并标记 degraded。存在启用依赖方时不能禁用依赖项。
 
-`theme` 和 `enhance` 类型插件同时只能启用一个。声明冲突的插件必须自动禁用。
+当前贡献点包含运行时变量、验证、分析、布局、Blockly 定义与生成器、变量定义、编辑器主题、播放器样式和内嵌选项。新增内建插件通过插件清单和贡献注册完成，不向 Engine 写入业务分支。
 
-## 游戏模组
+## 性能与离线
 
-游戏模组必须数据与逻辑分离：
-
-```text
-gamemods/
-  mod-name/
-    blocks.ts
-    generators.ts
-    variables.ts
-    docs.ts
-    ModPlugin.ts
-    index.ts
-```
-
-- `blocks.ts`、`generators.ts`、`variables.ts`、`docs.ts` 是纯数据。
-- `ModPlugin.ts` 负责运行时函数、钩子和状态逻辑。
-- 代码生成器只能生成对 `fns` 的调用。
-- 运行时函数必须通过 RuntimePlugin 注册。
-- Blockly 执行环境不得访问 `window`、`document` 或插件类实例。
-
-## 数据边界
-
-- 用户数据目录、运行日志、构建产物和打包输出不进入版本控制。
-- `.env` 不进入版本控制。
-- 示例配置使用 `.env.example` 或 `production.env.txt`。
-- 上传图片和故事数据默认保存在 `userdata/`。
-- 导出 HTML 只包含作品运行所需数据，不包含作者私有凭据。
+- 页面按路由懒加载，React Flow 只渲染可见节点。
+- 图分析使用 SCC 缩合后的 DAG 计算，禁止对每个节点重复全图 DFS。
+- 图片 Blob 与 Story 分离，资源 URL 生命周期集中管理。
+- PWA 只缓存应用壳和构建资源，用户作品仍以 IndexedDB 为唯一事实。
+- 常规压力覆盖 100、500、1000 节点。
 
 ## 当前不做
 
@@ -163,22 +124,19 @@ gamemods/
 - 复杂数值养成系统。
 - 实时竞技。
 - 云同步平台。
-- 商城或素材市场。
-- 移动端原生应用。
+- 商城、素材市场或远程插件市场。
+- 移动端编辑器适配。
 
 ## 验收标准
 
-- `npm.cmd run verify` 通过。
-- `npm.cmd run typecheck` 通过。
-- 前端单元测试通过。
-- 前端构建通过。
-- 后端 TypeScript 构建通过。
-- 独立播放器构建通过。
-- E2E 相关改动必须运行 `npm.cmd run test:e2e`；该命令必须以有头模式打开真实浏览器，无法运行时说明具体原因。
-- 根目录不保留临时 `.cmd`、`rm.py`、`howtotest.md`、散落 Nginx 文档或重复 README。
+- `npm.cmd run verify` 仅运行类型检查、单元测试、生产构建和静态边界，并在日常开发时间尺度内完成。
+- `npm.cmd run test:e2e` 独立验证 GitHub Pages 子路径、作品库、自动保存、冲突、离线、插件、导入导出和两种独立播放器。
+- `npm.cmd run test:stress` 独立验证 100、500、1000 节点加载、编辑、保存和刷新恢复。
+- 独立 HTML 在 `file://` 下运行且不发出 HTTP(S) 请求。
+- 运行时代码、构建、依赖和测试不要求后端、账号、JWT、`/api`、`/userdata` 或 Windows 打包。
+- GitHub Pages 产物可从 `/mo/` 打开、Hash 深链刷新并离线重载。
+- 保留功能的页面视觉、可见文案和交互结果不因架构重构缩水。
 
 ## 开源协议
 
-本项目代码选择 MIT License。
-
-第三方依赖遵循各自许可证，包括 React、Vite、React Flow、Blockly、Express、JWT、bcryptjs、nodemailer、JSZip、marked、Playwright、Vitest、archiver、node-fetch 等。
+本项目代码使用 MIT License。第三方依赖遵循各自许可证。
