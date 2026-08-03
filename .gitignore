@@ -5,10 +5,12 @@ node_modules/
 dist/
 build/
 coverage/
-player-dist/
-public/templates/*.html
 playwright-report/
 test-results/
+artifacts/
+
+# Local research repositories
+reference/
 
 # Local caches and logs
 __pycache__/

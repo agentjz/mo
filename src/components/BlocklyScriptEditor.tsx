@@ -4,7 +4,8 @@
  * 特点：完全独立、无耦合、简单布局
  */
 
-import type { BlocklyWorkspaceState, VariableDefinition } from '../types/index';
+import type { BlocklyWorkspaceState } from '../types/blockly.ts';
+import type { VariableDefinition } from '../domain/story/document.ts';
 import { useTheme } from '../contexts/ThemeContext';
 import BlocklyEditor from './BlocklyEditor';
 

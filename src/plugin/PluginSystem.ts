@@ -2,15 +2,8 @@ import { ContributionRegistry, type PluginContributionMap } from './contribution
 import type {
   Plugin,
   PluginContext,
-  PluginHook,
-  PluginHookHandler,
   RegisteredPlugin,
 } from './types.ts';
-
-interface OwnedHook {
-  ownerPluginId: string;
-  handler: PluginHookHandler;
-}
 
 interface OwnedEventHandler {
   ownerPluginId: string;
@@ -22,7 +15,6 @@ type ConfigChangeListener = () => void | Promise<void>;
 
 export class PluginSystem {
   private readonly plugins = new Map<string, RegisteredPlugin>();
-  private readonly hooks = new Map<PluginHook, OwnedHook[]>();
   private readonly eventHandlers = new Map<string, OwnedEventHandler[]>();
   private readonly dataStore = new Map<string, unknown>();
   private readonly contributions = new ContributionRegistry();
@@ -32,7 +24,6 @@ export class PluginSystem {
 
   constructor(context: Partial<PluginContext> = {}) {
     this.context = {
-      engine: context.engine ?? this.createDefaultEngine(),
       data: {
         get: key => this.dataStore.get(key),
         set: (key, value) => { this.dataStore.set(key, value); },
@@ -45,13 +36,11 @@ export class PluginSystem {
       },
       getPlugin: this.getPluginInstance.bind(this),
       getContribution: this.getContribution.bind(this),
-      pluginSystem: this,
       ui: context.ui,
     };
   }
 
   updateContext(context: Partial<PluginContext>): void {
-    if (context.engine) this.context.engine = context.engine;
     if (context.ui) this.context.ui = context.ui;
   }
 
@@ -132,30 +121,6 @@ export class PluginSystem {
     }
   }
 
-  trigger<T>(hookName: PluginHook, data: T): T {
-    let result: unknown = data;
-    for (const owned of this.hooks.get(hookName) ?? []) {
-      try {
-        result = owned.handler(result, this.context);
-      } catch (error) {
-        this.markDegraded(owned.ownerPluginId, error);
-      }
-    }
-    return result as T;
-  }
-
-  async triggerAsync<T>(hookName: PluginHook, data: T): Promise<T> {
-    let result: unknown = data;
-    for (const owned of this.hooks.get(hookName) ?? []) {
-      try {
-        result = await owned.handler(result, this.context);
-      } catch (error) {
-        this.markDegraded(owned.ownerPluginId, error);
-      }
-    }
-    return result as T;
-  }
-
   getContribution<Kind extends keyof PluginContributionMap>(
     kind: Kind,
     key: string,
@@ -217,8 +182,14 @@ export class PluginSystem {
   async updatePluginSettings(pluginId: string, settings: Record<string, unknown>): Promise<void> {
     const registered = this.plugins.get(pluginId);
     if (!registered) throw new Error(`Plugin ${pluginId} is not registered`);
-    registered.plugin.updateSettings?.(settings);
-    await this.notifyConfigChange();
+    const before = structuredClone(registered.plugin.getSettings?.() ?? {});
+    try {
+      registered.plugin.updateSettings?.(structuredClone(settings));
+      await this.notifyConfigChange();
+    } catch (error) {
+      registered.plugin.updateSettings?.(before);
+      throw error;
+    }
   }
 
   onConfigChange(listener: ConfigChangeListener): () => void {
@@ -249,9 +220,6 @@ export class PluginSystem {
     this.activatingPluginId = id;
     try {
       await plugin.install(this.context);
-      for (const [hookName, handler] of Object.entries(plugin.hooks ?? {})) {
-        this.registerHook(id, hookName as PluginHook, handler);
-      }
       this.contributions.register(id, plugin.getContributions?.());
       registered.health = 'ready';
       registered.error = undefined;
@@ -284,19 +252,10 @@ export class PluginSystem {
   }
 
   private removeOwnedRuntime(pluginId: string): void {
-    for (const [hook, handlers] of this.hooks) {
-      this.hooks.set(hook, handlers.filter(item => item.ownerPluginId !== pluginId));
-    }
     for (const [event, handlers] of this.eventHandlers) {
       this.eventHandlers.set(event, handlers.filter(item => item.ownerPluginId !== pluginId));
     }
     this.contributions.unregisterOwner(pluginId);
-  }
-
-  private registerHook(ownerPluginId: string, hookName: PluginHook, handler: PluginHookHandler): void {
-    const handlers = this.hooks.get(hookName) ?? [];
-    handlers.push({ ownerPluginId, handler });
-    this.hooks.set(hookName, handlers);
   }
 
   private addEventListener<T>(event: string, handler: (data: T) => void): void {
@@ -330,16 +289,6 @@ export class PluginSystem {
   private getPluginInstance<T = unknown>(pluginId: string): T | null {
     const registered = this.plugins.get(pluginId);
     return registered?.enabled ? registered.plugin as T : null;
-  }
-
-  private createDefaultEngine(): PluginContext['engine'] {
-    return {
-      getNode: () => null,
-      getAllNodes: () => [],
-      getEdges: () => [],
-      getCurrentNodeId: () => null,
-      moveTo: () => { throw new Error('引擎尚未注入，无法跳转节点'); },
-    };
   }
 
   private assertDependenciesInstalled(plugin: Plugin): void {

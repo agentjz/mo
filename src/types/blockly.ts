@@ -16,6 +16,7 @@ export interface BlocklyWorkspaceState {
     id: string;
     type?: string;
   }>;
+  generatedCode?: string;
 }
 
 /**

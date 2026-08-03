@@ -5,23 +5,16 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PlayerCore } from '../player/PlayerCore.ts';
-import type { Story, CurrentNode, ChoiceWithTarget } from '../types/index.ts';
+import { PlayerController } from '../application/player/PlayerController.ts';
+import type { Choice, StoryDocument } from '../domain/story/document.ts';
 import { resolveAssetUrl } from '../hooks/useAssetUrl.ts';
 import ChatGameMenu from '../components/ChatGameMenu.tsx';
+import { usePluginSystem } from '../contexts/PluginContext.tsx';
 import '../styles/chat-style-player.css';
 import '../styles/game-menu.css';
 import '../styles/start-screen.css';
 
-interface Hotspot {
-  id: string;
-  targetNodeId: string;
-  label: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
+type Hotspot = NonNullable<StoryDocument['scenes'][number]['media']['hotspots']>[number];
 
 interface ChatMessage {
   id: string;
@@ -37,20 +30,23 @@ interface ChatMessage {
 }
 
 interface Props {
-  story: Story;
+  story: StoryDocument;
+  startSceneId?: string;
 }
 
-function ChatStylePlayer({ story }: Props): JSX.Element {
+function ChatStylePlayer({ story, startSceneId }: Props): JSX.Element {
   const navigate = useNavigate();
+  const pluginSystem = usePluginSystem();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [currentChoices, setCurrentChoices] = useState<ChoiceWithTarget[]>([]);
+  const [currentChoices, setCurrentChoices] = useState<Choice[]>([]);
   const [gameEnded, setGameEnded] = useState<boolean>(false);
   const [showGameMenu, setShowGameMenu] = useState<boolean>(false);
   const [gameStarted, setGameStarted] = useState<boolean>(false);
   const [hasSaveData, setHasSaveData] = useState<boolean>(false);
   const [background, setBackground] = useState<string>('');
   const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
-  const playerRef = useRef<PlayerCore | null>(null);
+  const [currentSceneId, setCurrentSceneId] = useState<string>('');
+  const playerRef = useRef<PlayerController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
@@ -95,7 +91,7 @@ function ChatStylePlayer({ story }: Props): JSX.Element {
           setCurrentChoices([]);
           
           // 执行选择
-          playerRef.current.makeChoice(choiceId);
+          playerRef.current.choose(choiceId);
         }
       }
     };
@@ -105,31 +101,29 @@ function ChatStylePlayer({ story }: Props): JSX.Element {
   }, [gameStarted]);
 
   async function initializePlayer(): Promise<void> {
-    const player = new PlayerCore({
-      saveKeyPrefix: `chat_save_${story.id}_`,
-      onNodeChange: async (node: CurrentNode) => {
-        const renderedText = node.renderedHTML || node.text || '';
-        
-        // 获取节点数据
-        const nodeData = story.nodes.find(n => n.id === node.id)?.data as any;
-        const typewriterSpeed = nodeData?.typewriterSpeed || 0;
+    const player = new PlayerController(story, {
+      onSnapshot: async (snapshot, renderedText) => {
+        const scene = snapshot.scene;
+        if (!scene) return;
+        setCurrentSceneId(scene.id);
+        const typewriterSpeed = scene.content.typewriterSpeed || 0;
         
         const newMessages: ChatMessage[] = [];
         
         // 加载热区数据
-        const imageHotspots = nodeData?.pluginData?.['image-hotspots'] || [];
+        const imageHotspots = scene.media.hotspots ?? [];
         const hasHotspots = imageHotspots.length > 0;
         
         // 如果有背景图，先添加图片消息
-        if (node.image?.imagePath) {
+        if (scene.media.background?.assetId) {
           newMessages.push({
-            id: `image_${node.id}_${Date.now()}`,
+            id: `image_${scene.id}_${Date.now()}`,
             type: 'image',
             text: '',
             timestamp: Date.now(),
-            imageUrl: await resolveAssetUrl(node.image.imagePath),
-            imageWidth: node.image.width,
-            imageHeight: node.image.height,
+            imageUrl: await resolveAssetUrl(scene.media.background.assetId),
+            imageWidth: scene.media.background.width,
+            imageHeight: scene.media.background.height,
             hotspots: hasHotspots ? imageHotspots : undefined
           });
           
@@ -141,8 +135,8 @@ function ChatStylePlayer({ story }: Props): JSX.Element {
         
         // 只有在非热区模式下才添加文本消息
         let messageId: string | null = null;
-        if (!hasHotspots || !node.image) {
-          messageId = `story_${node.id}_${Date.now()}`;
+        if (!hasHotspots || !scene.media.background) {
+          messageId = `story_${scene.id}_${Date.now()}`;
           newMessages.push({
             id: messageId,
             type: 'story',
@@ -163,24 +157,23 @@ function ChatStylePlayer({ story }: Props): JSX.Element {
           }, typewriterSpeed * renderedText.length);
         }
         
-        setGameEnded(node.type === 'ending');
+        setCurrentChoices(snapshot.availableChoices);
+        setGameEnded(snapshot.status === 'ended');
       },
-      onChoicesChange: (choices) => {
-        setCurrentChoices(choices);
-      },
-      onExit: () => navigate('/')
-    });
+    }, undefined,
+    pluginSystem.listContributions('rulePack').map(item => item.value),
+    pluginSystem.getContribution('runtime', 'variables'));
     
     playerRef.current = player;
     
-    const slots = player.getSaveSlots();
+    const slots = player.listSaveSlots();
     const hasData = slots.some(slot => slot.exists);
     setHasSaveData(hasData);
   }
 
   async function handleStartGame(): Promise<void> {
     if (!playerRef.current) return;
-    await playerRef.current.start(story);
+    playerRef.current.start(startSceneId);
     setGameStarted(true);
   }
 
@@ -204,14 +197,14 @@ function ChatStylePlayer({ story }: Props): JSX.Element {
       setCurrentChoices([]);
       
       // 执行选择
-      playerRef.current.makeChoice(choiceId);
+      playerRef.current.choose(choiceId);
     }
   }
 
   function handleNewGame(): void {
     if (playerRef.current) {
       setMessages([]);
-      playerRef.current.executeRestart();
+      playerRef.current.restart();
     }
   }
 
@@ -220,7 +213,11 @@ function ChatStylePlayer({ story }: Props): JSX.Element {
   }
 
   return (
-    <div className="chat-player">
+    <div
+      className="chat-player"
+      data-player-template="builtin.chat"
+      data-scene-variant={story.presentation.sceneVariants[currentSceneId] ?? 'default'}
+    >
       {/* 背景（模糊效果） */}
       {background && (
         <div 
@@ -257,7 +254,7 @@ function ChatStylePlayer({ story }: Props): JSX.Element {
                 ‹
               </button>
               <div className="chat-title">{story.meta.title}</div>
-              <button className="chat-menu-button" onClick={() => setShowGameMenu(true)}>
+              <button className="chat-menu-button" data-player-menu onClick={() => setShowGameMenu(true)}>
                 ⋯
               </button>
             </div>
@@ -293,11 +290,13 @@ function ChatStylePlayer({ story }: Props): JSX.Element {
                         />
                         {/* 热区层（完全透明，无边框） */}
                         {hasHotspots && message.hotspots!.map((hotspot) => (
-                          <div
+                          <button
+                            type="button"
+                            aria-label={hotspot.label}
                             key={hotspot.id}
                             onClick={() => {
                               if (playerRef.current) {
-                                playerRef.current.jumpToNode(hotspot.targetNodeId);
+                                playerRef.current.useHotspot(hotspot.id);
                               }
                             }}
                             style={{
@@ -307,7 +306,9 @@ function ChatStylePlayer({ story }: Props): JSX.Element {
                               width: `${hotspot.width * 100}%`,
                               height: `${hotspot.height * 100}%`,
                               cursor: 'pointer',
-                              background: 'transparent'
+                              background: 'transparent',
+                              border: 0,
+                              padding: 0
                             }}
                           />
                         ))}
@@ -381,7 +382,7 @@ function ChatStylePlayer({ story }: Props): JSX.Element {
         {/* 游戏菜单（在手机容器内） */}
         {showGameMenu && playerRef.current && (
           <ChatGameMenu
-            playerCore={playerRef.current}
+            playerController={playerRef.current}
             onClose={() => setShowGameMenu(false)}
             onNewGame={handleNewGame}
             onExit={handleExit}

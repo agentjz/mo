@@ -3,10 +3,16 @@ import { expect, type Page } from '@playwright/test';
 export interface BrowserStoredStory {
   id: string;
   revision: number;
-  story: {
-    meta: { title: string; renderStyle?: 'visual-novel' | 'chat' };
-    nodes: Array<{ id: string; data: { text: string } }>;
+  document: {
+    meta: { title: string };
+    presentation: { templateId: string; sceneVariants: Record<string, string> };
+    scenes: Array<{
+      id: string;
+      content: { text: string };
+      choices: Array<{ id: string; targetSceneId: string }>;
+    }>;
   };
+  editorState: { scenePositions: Record<string, { x: number; y: number }> };
 }
 
 export async function openDashboard(page: Page): Promise<void> {

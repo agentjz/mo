@@ -2,17 +2,11 @@ import { useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { workspaceService } from '../application/workspace/WorkspaceService.ts';
 import Loading from '../components/ui/Loading.tsx';
-import { usePluginSystem } from '../contexts/PluginContext.tsx';
-import { HTMLExporter } from '../platform/export/HTMLExporter.ts';
-import { StoryArchiveService } from '../platform/export/StoryArchiveService.ts';
 import { downloadBlob, safeFileName } from '../platform/export/binary.ts';
-import { workspaceRepository } from '../platform/storage/WorkspaceRepository.ts';
-import type { Story } from '../types/index.ts';
+import type { StoryDocument } from '../domain/story/document.ts';
+import { usePluginSystem } from '../contexts/PluginContext.tsx';
 import notification from '../utils/notification.ts';
 import '../styles/dashboard.css';
-
-const archiveService = new StoryArchiveService(workspaceRepository);
-const htmlExporter = new HTMLExporter(workspaceRepository);
 
 function chooseFile(accept: string): Promise<File | null> {
   return new Promise(resolve => {
@@ -28,7 +22,7 @@ function chooseFile(accept: string): Promise<File | null> {
 function Dashboard(): JSX.Element {
   const navigate = useNavigate();
   const pluginSystem = usePluginSystem();
-  const [stories, setStories] = useState<Story[]>([]);
+  const [stories, setStories] = useState<StoryDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -84,24 +78,6 @@ function Dashboard(): JSX.Element {
     }
   }
 
-  async function handleExportJSON(id: string, event: MouseEvent): Promise<void> {
-    event.stopPropagation();
-    const story = storyById.get(id);
-    if (!story) return notification.error('故事不存在');
-    downloadBlob(archiveService.exportStoryJson(story), `${safeFileName(story.meta.title)}.json`);
-    notification.success('故事已导出为JSON');
-  }
-
-  async function handleExportZip(id: string, event: MouseEvent): Promise<void> {
-    event.stopPropagation();
-    await runBusy(async () => {
-      const story = storyById.get(id);
-      if (!story) throw new Error('故事不存在');
-      downloadBlob(await archiveService.exportStoryZip(story), `${safeFileName(story.meta.title)}.zip`);
-      notification.success('故事已导出为ZIP');
-    }, '导出失败');
-  }
-
   async function handleExportHTML(id: string, event: MouseEvent): Promise<void> {
     event.stopPropagation();
     await runBusy(async () => {
@@ -109,37 +85,16 @@ function Dashboard(): JSX.Element {
       if (!story) throw new Error('故事不存在');
       notification.info('正在导出视觉小说HTML，请稍候...');
       downloadBlob(
-        await htmlExporter.export(story, findPlayerStyleCSS()),
+        await workspaceService.exportStandalone(story, pluginSystem.listContributions('rulePack').map(item => item.value)),
         `${safeFileName(story.meta.title)}_visual-novel.html`,
       );
       notification.success('visual-novelHTML已导出');
     }, '导出HTML失败');
   }
 
-  async function handleImportJSON(): Promise<void> {
-    const file = await chooseFile('.json,application/json');
-    if (!file) return;
-    await runBusy(async () => {
-      await archiveService.importStoryJson(file);
-      await loadStories();
-      notification.success('JSON已导入');
-    }, '导入失败');
-  }
-
-  async function handleImportZip(): Promise<void> {
-    const file = await chooseFile('.zip,application/zip');
-    if (!file) return;
-    await runBusy(async () => {
-      notification.info('正在解析ZIP文件...');
-      await archiveService.importStoryZip(file);
-      await loadStories();
-      notification.success('ZIP已导入');
-    }, '导入失败');
-  }
-
   async function handleExportWorkspace(): Promise<void> {
     await runBusy(async () => {
-      downloadBlob(await archiveService.exportWorkspace(), '墨水作品库备份.zip');
+      downloadBlob(await workspaceService.exportWorkspace(), '墨水作品库备份.zip');
       notification.success('作品库已导出');
     }, '导出失败');
   }
@@ -148,7 +103,7 @@ function Dashboard(): JSX.Element {
     const file = await chooseFile('.zip,application/zip');
     if (!file || !confirm('导入作品库将替换当前全部作品，确定继续吗？')) return;
     await runBusy(async () => {
-      await archiveService.restoreWorkspace(file);
+      await workspaceService.restoreWorkspace(file);
       await loadStories();
       notification.success('作品库已导入');
     }, '导入失败');
@@ -167,11 +122,6 @@ function Dashboard(): JSX.Element {
     }
   }
 
-  function findPlayerStyleCSS(): string {
-    return pluginSystem.listContributions('playerStyle')
-      .find(item => item.value.compatibleWith === 'visual-novel')?.value.css() ?? '';
-  }
-
   if (loading) return <Loading />;
 
   return (
@@ -182,8 +132,6 @@ function Dashboard(): JSX.Element {
 
       <div className="dashboard-actions">
         <button className="btn-primary" onClick={handleCreateNew} disabled={busy}>+ 创建新作品</button>
-        <button className="btn-secondary" onClick={handleImportJSON} disabled={busy}>导入JSON</button>
-        <button className="btn-secondary" onClick={handleImportZip} disabled={busy}>导入ZIP</button>
         <button className="btn-secondary" onClick={handleExportWorkspace} disabled={busy}>导出作品库</button>
         <button className="btn-secondary" onClick={handleRestoreWorkspace} disabled={busy}>导入作品库</button>
         <button className="btn-secondary" onClick={() => navigate('/plugins')}>插件商店</button>
@@ -196,12 +144,10 @@ function Dashboard(): JSX.Element {
             <p className="story-meta">作者: {story.meta.author || '未命名'}</p>
             <p className="story-desc">{story.meta.description || '暂无描述'}</p>
             <div className="story-stats">
-              <span>{story.nodes?.length || 0} 个节点</span>
-              <span>{story.edges?.length || 0} 条连线</span>
+              <span>{story.scenes.length} 个节点</span>
+              <span>{story.scenes.reduce((total, scene) => total + scene.choices.length, 0)} 条连线</span>
             </div>
             <div className="story-actions">
-              <button className="btn-icon" onClick={event => void handleExportJSON(story.id, event)} title="导出JSON（纯文本）">JSON</button>
-              <button className="btn-icon" onClick={event => void handleExportZip(story.id, event)} title="导出ZIP（含图片）">ZIP</button>
               <button className="btn-icon" onClick={event => void handleExportHTML(story.id, event)} title="导出为HTML">HTML</button>
               <button
                 className={`btn-icon btn-danger ${deleteConfirmId === story.id ? 'btn-danger-confirm' : ''}`}

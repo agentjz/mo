@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import type { StoryNode, StoryEdge, TextNodeData } from '../types/index.ts'
+import type { StoryFlowNode as StoryNode, StoryFlowEdge as StoryEdge, StoryFlowNodeData as TextNodeData } from '../ui/editor/flowTypes.ts'
 import { useTheme } from '../contexts/ThemeContext.tsx'
 
 interface EdgeEditPanelProps {
@@ -44,7 +44,7 @@ function EdgeEditPanel({ edge, nodes, onDelete, onClose }: EdgeEditPanelProps): 
 
   // 找到具体的选项
   const sourceChoice = sourceNode 
-    ? (sourceNode.data as TextNodeData).choices?.find((c: any) => c.id === edge.sourceHandle)
+    ? (sourceNode.data as TextNodeData).choices?.find(choice => choice.id === edge.sourceHandle)
     : null
 
   const getNodeTypeLabel = (nodeType?: string): string => {

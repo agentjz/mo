@@ -1,0 +1,20 @@
+{
+  "F001": ["tests/visual/experience-baseline.spec.ts"],
+  "F002": ["tests/unit/ExperienceBaselineContract.test.ts"],
+  "F003": ["scripts/check-architecture.mjs"],
+  "F004": ["tests/unit/StoryDocument.test.ts", "tests/unit/AuthoringSession.test.ts"],
+  "F005": ["tests/unit/AuthoringSession.test.ts", "tests/e2e/authoring.spec.ts"],
+  "F006": ["tests/unit/StorySaveCoordinator.test.ts", "tests/e2e/workspace.spec.ts"],
+  "F007": ["tests/unit/RuleEngine.test.ts"],
+  "F008": ["tests/visual/experience-baseline.spec.ts", "tests/e2e/templates.spec.ts"],
+  "F009": ["tests/unit/TemplateRegistry.test.ts", "scripts/check-architecture.mjs"],
+  "F010": ["tests/unit/PlayerKernel.test.ts", "tests/unit/TemplateRegistry.test.ts"],
+  "F011": ["tests/unit/TemplateCatalog.test.ts", "tests/e2e/templates.spec.ts"],
+  "F012": ["tests/unit/TemplatePackageService.test.ts", "tests/unit/PluginSystem.test.ts"],
+  "F013": ["tests/unit/StoryArchiveService.test.ts", "tests/e2e/export.spec.ts"],
+  "F014": ["tests/unit/TemplateCompiler.test.ts", "tests/e2e/templates.spec.ts"],
+  "F015": ["tests/unit/PluginSystem.test.ts"],
+  "F016": ["tests/stress/editorStressCase.ts", "tests/e2e/loading.spec.ts"],
+  "F017": ["tests/visual/experience-baseline.spec.ts", "tests/e2e/accessibility.spec.ts"],
+  "F018": ["scripts/check-architecture.mjs"]
+}

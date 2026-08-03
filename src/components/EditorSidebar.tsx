@@ -6,9 +6,11 @@
 import { useState, useEffect } from 'react';
 import { useNodeSearch } from '../hooks/useNodeSearch.ts';
 import { useTheme } from '../contexts/ThemeContext.tsx';
-import type { StoryMeta, ValidationResult, VariableDefinition } from '../types/index.ts';
+import type { EditorStoryMeta as StoryMeta, VariableDefinition } from '../ui/editor/flowTypes.ts';
+import type { ValidationResult } from '../domain/story/validation.ts';
 import ScriptHelper from './ScriptHelper.tsx';
 import VariableManager from './VariableManager.tsx';
+import TemplateGallery from './TemplateGallery.tsx';
 
 interface StoryStats {
   nodeCount: number;
@@ -49,6 +51,7 @@ interface EditorSidebarProps {
   tagFilter: string;
   allTags: string[];
   onTagFilterChange: (tag: string) => void;
+  selectedSceneId: string | null;
 }
 
 function EditorSidebar({ 
@@ -78,13 +81,15 @@ function EditorSidebar({
   canRedo,
   tagFilter,
   allTags,
-  onTagFilterChange
+  onTagFilterChange,
+  selectedSceneId,
 }: EditorSidebarProps): JSX.Element {
   const { currentTheme } = useTheme();
   const isDark = currentTheme === 'theme.dark';
   const [deleteConfirm, setDeleteConfirm] = useState<boolean>(false);
   const [showAllNodes, setShowAllNodes] = useState<boolean>(false);
   const [startNodeId, setStartNodeId] = useState<string>('');
+  const [showTemplateGallery, setShowTemplateGallery] = useState(false);
   
   const { searchText, setSearchText, filteredNodes, searchStats } = useNodeSearch(allNodes);
 
@@ -160,15 +165,25 @@ function EditorSidebar({
             />
           </div>
 
-          <div className="form-group">
+          <div className="form-group template-picker-group">
             <label>播放器样式</label>
             <select
               value={storyMeta.renderStyle || 'visual-novel'}
-              onChange={(e) => onMetaChange({ ...storyMeta, renderStyle: e.target.value as 'visual-novel' | 'chat' })}
+              onChange={(e) => {
+                const renderStyle = e.target.value as 'visual-novel' | 'chat';
+                onMetaChange({
+                  ...storyMeta,
+                  renderStyle,
+                  templateId: renderStyle === 'chat' ? 'builtin.chat' : 'builtin.visual-novel',
+                });
+              }}
             >
               <option value="visual-novel">视觉小说</option>
               <option value="chat">微信聊天</option>
             </select>
+            <button className="btn btn-secondary template-gallery-trigger" onClick={() => setShowTemplateGallery(true)}>
+              选择播放器模板
+            </button>
           </div>
 
           {allTags.length > 1 && (
@@ -451,6 +466,15 @@ function EditorSidebar({
           </div>
         )}
       </div>
+      {showTemplateGallery && (
+        <TemplateGallery
+          storyMeta={storyMeta}
+          selectedSceneId={selectedSceneId}
+          allNodes={allNodes}
+          onMetaChange={onMetaChange}
+          onClose={() => setShowTemplateGallery(false)}
+        />
+      )}
     </div>
   );
 }

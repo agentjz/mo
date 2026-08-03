@@ -11,12 +11,12 @@
 import React, { memo } from 'react'
 import { Handle, Position } from 'reactflow'
 import config from '../config/index.ts'
-import type { NodeData } from '../types/index.ts'
-import type { NodeAnalysis } from '../utils/engine/storyAnalyzer.ts'
+import type { StoryFlowNodeData as NodeData } from '../ui/editor/flowTypes.ts'
+import type { StoryNodeAnalysis } from '../domain/story/analysis.ts'
 
 interface StoryNodeProps {
   data: NodeData & {
-    analysis?: NodeAnalysis | null;  // 新增：节点分析信息
+    analysis?: StoryNodeAnalysis | null;
   };
 }
 

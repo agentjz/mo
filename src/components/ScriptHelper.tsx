@@ -6,7 +6,7 @@
 import { useState, useMemo } from 'react';
 import { usePluginSystem } from '../contexts/PluginContext.tsx';
 import type { GameModDocs } from '../plugins/gamemods/types.js';
-import type { VariableDefinition } from '../types/index.js';
+import type { VariableDefinition } from '../domain/story/document.ts';
 
 interface ScriptHelperProps {
   variables: VariableDefinition[];
@@ -23,11 +23,14 @@ function ScriptHelper({ variables, onVariablesChange }: ScriptHelperProps): JSX.
     .map(p => p.plugin.metadata.id);
   
   const gameModDocs: Record<string, GameModDocs> = useMemo(() => {
-    return pluginSystem.trigger('plugin:get-docs', {});
+    return Object.assign(
+      {},
+      ...pluginSystem.listContributions('rulePack').map(item => item.value.docs),
+    ) as Record<string, GameModDocs>;
   }, [pluginSystem]);
   
   const allPluginVariables: VariableDefinition[] = useMemo(() => {
-    return pluginSystem.trigger('plugin:get-variables', []);
+    return pluginSystem.listContributions('rulePack').flatMap(item => item.value.variables);
   }, [pluginSystem]);
 
   const toggleSection = (section: string) => {

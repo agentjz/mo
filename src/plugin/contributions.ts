@@ -1,16 +1,20 @@
-import type { StoryAnalysis } from '../utils/engine/storyAnalyzer.ts';
-import type { StoryEdge, StoryNode, ValidationResult } from '../types/index.ts';
+import type { StoryAnalysis } from '../domain/story/analysis.ts';
+import type { StoryDocument, VariableDefinition } from '../domain/story/document.ts';
+import type { StoryEditorState } from '../domain/story/editorState.ts';
+import type { ValidationResult } from '../domain/story/validation.ts';
+import type { PlayerTemplateEntry } from '../domain/templates/contracts.ts';
+import type { RuntimeVariableAccess, RuntimeVariableOwner, RuntimeValue } from '../domain/rules/RuleEngine.ts';
 
 export interface ValidatorContribution {
-  validate(nodes: StoryNode[], edges: StoryEdge[]): ValidationResult;
+  validate(document: StoryDocument): ValidationResult;
 }
 
 export interface AnalyzerContribution {
-  analyze(nodes: StoryNode[], edges: StoryEdge[]): StoryAnalysis;
+  analyze(document: StoryDocument): StoryAnalysis;
 }
 
 export interface LayoutContribution {
-  layout(nodes: StoryNode[], edges: StoryEdge[], analysis: StoryAnalysis): StoryNode[];
+  layout(document: StoryDocument, state: StoryEditorState, analysis: StoryAnalysis): StoryEditorState;
 }
 
 export interface EditorThemeContribution {
@@ -18,22 +22,33 @@ export interface EditorThemeContribution {
   definition(): unknown;
 }
 
-export interface PlayerStyleContribution {
-  compatibleWith: 'visual-novel';
-  css(): string;
+export type RuntimeFunction = (...args: unknown[]) => unknown;
+
+export type RuntimeContribution = RuntimeVariableOwner;
+
+export interface RulePackContribution {
+  variables: VariableDefinition[];
+  functions: Record<string, (runtime: RuntimeVariableAccess, ...args: RuntimeValue[]) => RuntimeValue | void>;
+  blockly: { blocks: unknown[]; generators: Record<string, unknown>; toolbox: unknown[] };
+  docs: Record<string, unknown>;
 }
 
-export type RuntimeFunction = (...args: never[]) => unknown;
-
-export interface RuntimeContribution {
-  get(path: string): unknown;
-  set(path: string, value: unknown): void;
-  registerFunction(name: string, fn: RuntimeFunction): void;
-  variables(): Record<string, unknown>;
+export interface ContentRenderInput {
+  html: string;
+  text: string;
+  sceneId: string;
+  choices: Array<{ id: string; text: string }>;
 }
 
-export interface ChoiceEmbeddingContribution {
-  getEmbeddedChoiceIds(nodeId: string): string[];
+export interface ContentRendererContribution {
+  order: number;
+  render(input: ContentRenderInput): ContentRenderInput;
+}
+
+export interface EditorToolContribution {
+  id: string;
+  label: string;
+  run(input: unknown): unknown;
 }
 
 export interface PluginContributionMap {
@@ -41,9 +56,11 @@ export interface PluginContributionMap {
   analyzer: AnalyzerContribution;
   layout: LayoutContribution;
   editorTheme: EditorThemeContribution;
-  playerStyle: PlayerStyleContribution;
   runtime: RuntimeContribution;
-  choiceEmbedding: ChoiceEmbeddingContribution;
+  rulePack: RulePackContribution;
+  playerTemplate: PlayerTemplateEntry;
+  contentRenderer: ContentRendererContribution;
+  editorTool: EditorToolContribution;
 }
 
 export type PluginContributions = Partial<{
@@ -61,10 +78,7 @@ export class ContributionRegistry {
   register(ownerPluginId: string, contributions: PluginContributions | undefined): void {
     if (!contributions) return;
     const pending: Array<{ kind: keyof PluginContributionMap; key: string; value: unknown }> = [];
-    for (const [kind, values] of Object.entries(contributions) as Array<[
-      keyof PluginContributionMap,
-      Record<string, unknown>,
-    ]>) {
+    for (const [kind, values] of Object.entries(contributions) as Array<[keyof PluginContributionMap, Record<string, unknown>]>) {
       for (const [key, value] of Object.entries(values)) {
         if (this.slots.get(kind)?.has(key)) throw new Error(`Contribution ${kind}:${key} is already registered`);
         pending.push({ kind, key, value });
@@ -79,9 +93,7 @@ export class ContributionRegistry {
 
   unregisterOwner(ownerPluginId: string): void {
     for (const slot of this.slots.values()) {
-      for (const [key, registered] of slot) {
-        if (registered.ownerPluginId === ownerPluginId) slot.delete(key);
-      }
+      for (const [key, registered] of slot) if (registered.ownerPluginId === ownerPluginId) slot.delete(key);
     }
   }
 
@@ -89,11 +101,7 @@ export class ContributionRegistry {
     return this.slots.get(kind)?.get(key)?.value as PluginContributionMap[Kind] | undefined;
   }
 
-  list<Kind extends keyof PluginContributionMap>(kind: Kind): Array<{
-    key: string;
-    ownerPluginId: string;
-    value: PluginContributionMap[Kind];
-  }> {
+  list<Kind extends keyof PluginContributionMap>(kind: Kind): Array<{ key: string; ownerPluginId: string; value: PluginContributionMap[Kind] }> {
     return [...(this.slots.get(kind)?.entries() ?? [])].map(([key, registered]) => ({
       key,
       ownerPluginId: registered.ownerPluginId,

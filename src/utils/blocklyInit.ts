@@ -88,12 +88,11 @@ export function initializeBlockly(pluginSystem: PluginSystem): void {
   // ============= 2. 注册自定义积木块（互动小说专用 + 游戏模组）============
   console.log('[Blockly] Step 2: Collecting custom blocks from plugins...');
   
-  // 通过钩子收集所有插件的积木块定义。
-  const allCustomBlocks: any[] = pluginSystem.trigger('blockly:register-blocks', []);
+  const rulePacks = pluginSystem.listContributions('rulePack').map(item => item.value);
+  const allCustomBlocks = rulePacks.flatMap(pack => pack.blockly.blocks);
   console.log(`[Blockly] Collected ${allCustomBlocks.length} custom blocks`);
   
-  // 通过钩子收集所有插件的代码生成器。
-  const allCustomGenerators: Record<string, any> = pluginSystem.trigger('blockly:register-generators', {});
+  const allCustomGenerators = Object.assign({}, ...rulePacks.map(pack => pack.blockly.generators));
   console.log(`[Blockly] Collected ${Object.keys(allCustomGenerators).length} code generators`);
   
   // 批量注册积木块。
@@ -126,8 +125,8 @@ export function initializeBlockly(pluginSystem: PluginSystem): void {
  * @param pluginSystem - 插件系统实例，用于收集插件提供的工具箱类别。
  */
 export function createCustomToolbox(pluginSystem: PluginSystem) {
-  // 通过钩子收集所有插件提供的工具箱类别。
-  const pluginCategories = pluginSystem.trigger('blockly:register-toolbox-categories', []);
+  const pluginCategories = pluginSystem.listContributions('rulePack')
+    .flatMap(item => item.value.blockly.toolbox);
   console.log(`[Blockly] Collected ${pluginCategories.length} plugin toolbox categories`);
   
   return {

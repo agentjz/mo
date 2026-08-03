@@ -9,8 +9,6 @@ export type {
   PluginMetadata,
   PluginConfig,
   PluginContext,
-  PluginHook,
-  PluginHookHandler,
   RegisteredPlugin
 } from './types.js';
 

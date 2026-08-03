@@ -4,10 +4,18 @@
  * 位置：右侧编辑面板上部
  */
 
-import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
-import type { StoryNode, Choice, NodeType, BlocklyWorkspaceState, NodeScripts, VariableDefinition } from '../types/index.ts';
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle, lazy, Suspense } from 'react';
+import type { BlocklyWorkspaceState, NodeScripts } from '../types/blockly.ts';
+import type {
+  EditorChoice as Choice,
+  StoryFlowNode as StoryNode,
+  VariableDefinition,
+} from '../ui/editor/flowTypes.ts';
+
+type NodeType = 'start' | 'normal' | 'ending';
 import { useTheme } from '../contexts/ThemeContext.tsx';
-import BlocklyScriptEditor from './BlocklyScriptEditor.tsx';
+
+const BlocklyScriptEditor = lazy(() => import('./BlocklyScriptEditor.tsx'));
 
 interface NodeContentPanelProps {
   node: StoryNode;
@@ -107,7 +115,8 @@ const NodeContentPanel = forwardRef<NodeContentPanelRef, NodeContentPanelProps>(
     const addChoice = (): void => {
       const newChoice: Choice = {
         id: `c${node.id}_${choices.length + 1}`,
-        text: `选项${choices.length + 1}`
+        text: `选项${choices.length + 1}`,
+        targetSceneId: node.id,
       };
       setChoices([...choices, newChoice]);
     };
@@ -426,7 +435,8 @@ const NodeContentPanel = forwardRef<NodeContentPanelRef, NodeContentPanelProps>(
         </div>
 
         {editingScript && (
-          <BlocklyScriptEditor
+          <Suspense fallback={<div className="blockly-overlay"><div className="blockly-window">加载编辑器...</div></div>}>
+            <BlocklyScriptEditor
             title={
               editingScript.type === 'node-enter' ? '进入节点时执行' :
               editingScript.type === 'node-leave' ? '离开节点时执行' :
@@ -462,7 +472,8 @@ const NodeContentPanel = forwardRef<NodeContentPanelRef, NodeContentPanelProps>(
               }
             }}
             onClose={() => setEditingScript(null)}
-          />
+            />
+          </Suspense>
         )}
       </>
     );

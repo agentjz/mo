@@ -25,7 +25,11 @@
 - 作品、图片资源、设置和插件配置保存在浏览器 IndexedDB 数据库 `mo-workspace`。
 - 首次初始化在同一事务中创建两份示例作品和初始化标记，刷新不会重复创建。
 - Service Worker 预缓存应用壳和构建资源；首次成功加载后可离线打开作品库。
-- 应用支持视觉小说和聊天两种播放器；网页预览和独立 HTML 共用同一套播放器源码。
+- 当前 StoryDocument 是场景、选择目标、媒体、变量、规则、表现配置和扩展数据的唯一事实；StoryEditorState 单独保存节点位置与视口。
+- 所有编辑写入通过 AuthoringSession 的版本化命令、原子批次、expected revision、结构化 diff、撤销和重做完成。
+- PlayerKernel 统一管理开始、跳转、选择、热区、历史、访问记录、规则时间点和存档；RuntimePlugin 是变量唯一写入口。
+- 应用内建十二套结构不同的播放器模板，其中视觉小说与聊天保留既有体验；网页试玩和独立 HTML 共用同一运行核心与模板实现。
+- 模板图库只为当前选中模板懒加载 sandbox iframe 真实预览；其他模板卡片不加载实现。本地模板 ZIP 与内建模板使用同一 manifest 和注册合同。
 - 首页和声明页的静态文案集中在 `src/content/` 类型化数据模块中，页面不运行时加载 Markdown。
 - 当前核心依赖包含 React、React Flow、Blockly、JSZip、marked、idb 和 Zod。
 
@@ -51,9 +55,9 @@
 
 ### 预览与导出
 
-用户可以直接预览作品，也可以导出单作品 JSON、含引用图片的 ZIP 或独立 HTML。独立 HTML 内联播放器、作品和资源，不依赖墨水服务器。
+用户可以直接试玩作品、切换播放器模板，也可以把单个作品导出为独立 HTML。独立 HTML 内联所选模板、运行核心、作品、引用资源和实际规则函数，不依赖墨水服务器。
 
-作品库可以整体导出为 ZIP 备份；恢复时先完整解码和校验，再在单个 IndexedDB 事务中替换当前作品库。
+工作区数据交换只保留一个整库 ZIP。导出包含当前全部作品、编辑投影、revision、图片资源、设置和插件配置；导入先完整解码与校验，再在单个 IndexedDB 事务中覆盖当前工作区。失败不得改变现有内容。
 
 ## 架构边界
 
@@ -66,7 +70,7 @@ domain -> application -> platform -> UI -> composition root
 - Domain：Story schema、文件格式、模板和纯规则。
 - Application：作品库用例和编辑保存协调，不直接渲染 UI。
 - Platform：IndexedDB、资源 URL、写锁、广播和导出适配器。
-- Plugin：类型化 Hook、Event、Data Store 和贡献注册表。
+- Plugin：类型化 Event、Data Store、贡献注册表和生命周期。
 - Engine：只管理节点跳转、选择、历史、存档和事件。
 - UI：React 页面和组件，只通过应用服务或类型化贡献端口访问能力。
 - Composition root：初始化存储、插件、主题、路由和离线注册。
@@ -93,22 +97,22 @@ IndexedDB 包含：
 
 ## 文件格式
 
-当前格式均带 `format` 和 `version`，只服务当前实现：
+当前边界格式均只服务当前实现：
 
-- JSON：单作品结构化数据。
-- ZIP：manifest、作品和全部引用资源。
-- 整库备份：manifest、全部作品、资源和设置。
-- HTML：单文件播放器、作品和 data URL 资源。
+- `mo.story` version 2：工作区内部的 StoryDocument schema，不作为单作品导入导出入口。
+- `mo.workspace` version 2：唯一工作区 ZIP，包含 manifest、全部作品、StoryEditorState、revision、资源和设置。
+- `mo.player-template` version 1：本地模板 ZIP，包含 manifest、HTML、CSS 和声明资源，不允许脚本或远程引用。
+- HTML：单作品、所选模板、运行核心、规则函数和 data URL 资源组成的独立播放器。
 
-导入使用 Zod 和文件边界限制校验格式、资源数量、单文件大小、总大小、MIME 和哈希。当前格式不提供旧格式兼容层。
+整库导入使用 Zod 和文件边界限制校验格式、引用、资源数量、单文件大小、总大小、MIME 和哈希，并在校验全部完成后原子覆盖。当前格式不提供旧格式兼容层。
 
 ## 插件平台
 
-`PluginSystem` 是插件注册状态、Hook、Event、Data Store、贡献和健康状态的唯一 owner。
+`PluginSystem` 是插件注册状态、Event、Data Store、贡献、配置和健康状态的唯一 owner。
 
-插件 manifest 声明 id、版本、分类、依赖、冲突、默认启用状态和兼容目标。注册、启用和禁用先校验依赖与冲突；激活失败清理该插件拥有的 Hook、事件和贡献并标记 degraded。存在启用依赖方时不能禁用依赖项。
+插件 manifest 声明 id、版本、分类、依赖、冲突、默认启用状态和兼容目标。注册、启用和禁用先校验依赖与冲突；激活失败清理该插件拥有的事件监听、数据和贡献并标记 degraded。存在启用依赖方时不能禁用依赖项。
 
-当前贡献点包含运行时变量、验证、分析、布局、Blockly 定义与生成器、变量定义、编辑器主题、播放器样式和内嵌选项。新增内建插件通过插件清单和贡献注册完成，不向 Engine 写入业务分支。
+当前贡献点包含运行时变量、规则包、验证、分析、布局、Blockly 定义与生成器、编辑器主题、内容渲染和编辑工具。新增内建插件通过插件清单和贡献注册完成，不向 PlayerKernel 写入业务分支。
 
 ## 性能与离线
 
@@ -116,7 +120,7 @@ IndexedDB 包含：
 - 图分析使用 SCC 缩合后的 DAG 计算，禁止对每个节点重复全图 DFS。
 - 图片 Blob 与 Story 分离，资源 URL 生命周期集中管理。
 - PWA 只缓存应用壳和构建资源，用户作品仍以 IndexedDB 为唯一事实。
-- 常规压力覆盖 100、500、1000 节点。
+- 常规压力覆盖 100、500、1000 节点的加载、搜索、选择、移动、连接、正文编辑、保存、刷新、模板切换和试玩。
 
 ## 当前不做
 
@@ -130,8 +134,8 @@ IndexedDB 包含：
 ## 验收标准
 
 - `npm.cmd run verify` 仅运行类型检查、单元测试、生产构建和静态边界，并在日常开发时间尺度内完成。
-- `npm.cmd run test:e2e` 独立验证 GitHub Pages 子路径、作品库、自动保存、冲突、离线、插件、导入导出和两种独立播放器。
-- `npm.cmd run test:stress` 独立验证 100、500、1000 节点加载、编辑、保存和刷新恢复。
+- `npm.cmd run test:e2e` 独立验证 GitHub Pages 子路径、作品库、自动保存、冲突、离线、插件、整库 ZIP、十二模板和独立 HTML。
+- `npm.cmd run test:stress` 独立验证 100、500、1000 节点全链编辑、模板切换、试玩、保存和刷新恢复。
 - 独立 HTML 在 `file://` 下运行且不发出 HTTP(S) 请求。
 - 运行时代码、构建、依赖和测试不要求后端、账号、JWT、`/api`、`/userdata` 或 Windows 打包。
 - GitHub Pages 产物可从 `/mo/` 打开、Hash 深链刷新并离线重载。

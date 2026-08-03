@@ -38,7 +38,7 @@ test('创建、编辑、自动保存和刷新恢复', async ({ page }) => {
 
   const title = `自动保存_${Date.now()}`;
   await page.getByPlaceholder('我的互动小说').fill(title);
-  const titleSaved = await waitForStory(page, storyId, stored => stored?.story.meta.title === title);
+  const titleSaved = await waitForStory(page, storyId, stored => stored?.document.meta.title === title);
   expect(titleSaved.revision).toBeGreaterThan(1);
 
   await page.locator('.react-flow__node').first().click();
@@ -47,7 +47,7 @@ test('创建、编辑、自动保存和刷新恢复', async ({ page }) => {
   const text = `节点正文_${Date.now()}`;
   await panel.getByPlaceholder(/输入小说内容/).fill(text);
   await panel.getByRole('button', { name: '关闭' }).click();
-  await waitForStory(page, storyId, stored => stored?.story.nodes[0]?.data.text === text);
+  await waitForStory(page, storyId, stored => stored?.document.scenes[0]?.content.text === text);
 
   await page.reload();
   await expect(page.getByPlaceholder('我的互动小说')).toHaveValue(title);

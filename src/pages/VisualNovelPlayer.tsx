@@ -5,44 +5,42 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PlayerCore } from '../player/PlayerCore.ts';
-import type { Story, CurrentNode, ChoiceWithTarget, CharacterImages, NodeImage } from '../types/index.ts';
+import { PlayerController } from '../application/player/PlayerController.ts';
+import type { Choice, MediaAsset, StoryDocument } from '../domain/story/document.ts';
 import { resolveAssetUrl } from '../hooks/useAssetUrl.ts';
 import GameMenu from '../components/GameMenu.tsx';
 import StartScreen from '../components/StartScreen.tsx';
+import { usePluginSystem } from '../contexts/PluginContext.tsx';
 import '../styles/visual-novel-player.css';
 import '../styles/game-menu.css';
 import '../styles/start-screen.css';
 
-interface Hotspot {
-  id: string;
-  targetNodeId: string;
-  label: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
+type Hotspot = NonNullable<StoryDocument['scenes'][number]['media']['hotspots']>[number];
+type ResolvedCharacter = MediaAsset & { url: string };
+type ResolvedCharacters = Partial<Record<'left' | 'center' | 'right', ResolvedCharacter>>;
 
 interface Props {
-  story: Story;
+  story: StoryDocument;
+  startSceneId?: string;
 }
 
-function VisualNovelPlayer({ story }: Props): JSX.Element {
+function VisualNovelPlayer({ story, startSceneId }: Props): JSX.Element {
   const navigate = useNavigate();
+  const pluginSystem = usePluginSystem();
   const [currentText, setCurrentText] = useState<string>('');
   const [displayText, setDisplayText] = useState<string>('');
   const [isTyping, setIsTyping] = useState<boolean>(false);
   const [background, setBackground] = useState<string>('');
-  const [nodeImage, setNodeImage] = useState<NodeImage | undefined>(undefined);
-  const [characterImages, setCharacterImages] = useState<CharacterImages>({});
-  const [currentChoices, setCurrentChoices] = useState<ChoiceWithTarget[]>([]);
+  const [nodeImage, setNodeImage] = useState<MediaAsset | undefined>(undefined);
+  const [characterImages, setCharacterImages] = useState<ResolvedCharacters>({});
+  const [currentChoices, setCurrentChoices] = useState<Choice[]>([]);
   const [gameEnded, setGameEnded] = useState<boolean>(false);
   const [hotspots, setHotspots] = useState<Hotspot[]>([]);
   const [typewriterSpeed, setTypewriterSpeed] = useState<number>(0);
   const [showGameMenu, setShowGameMenu] = useState<boolean>(false);
   const [gameStarted, setGameStarted] = useState<boolean>(false);
   const [hasSaveData, setHasSaveData] = useState<boolean>(false);
+  const [currentSceneId, setCurrentSceneId] = useState<string>('');
   const [dialogUIConfig, setDialogUIConfig] = useState({
     position: 'bottom' as 'top' | 'center' | 'bottom',
     height: 200,
@@ -53,7 +51,7 @@ function VisualNovelPlayer({ story }: Props): JSX.Element {
     blur: 15,
     fontSize: 18
   });
-  const playerRef = useRef<PlayerCore | null>(null);
+  const playerRef = useRef<PlayerController | null>(null);
   const dialogueBoxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -100,7 +98,7 @@ function VisualNovelPlayer({ story }: Props): JSX.Element {
       if (target.classList.contains('choice-embed-link') || target.hasAttribute('data-choice-id')) {
         const choiceId = target.getAttribute('data-choice-id');
         if (choiceId && playerRef.current) {
-          playerRef.current.makeChoice(choiceId);
+          playerRef.current.choose(choiceId);
         }
       }
     };
@@ -110,82 +108,72 @@ function VisualNovelPlayer({ story }: Props): JSX.Element {
   }, [displayText]);
 
   async function initializePlayer(): Promise<void> {
-    const player = new PlayerCore({
-      saveKeyPrefix: `vn_save_${story.id}_`,
-      onNodeChange: async (node: CurrentNode) => {
+    const player = new PlayerController(story, {
+      onSnapshot: async (snapshot, renderedText) => {
+        const scene = snapshot.scene;
+        if (!scene) return;
+        setCurrentSceneId(scene.id);
         // 使用渲染后的HTML内容，与终端播放器保持一致
-        const renderedText = node.renderedHTML || node.text || '';
         setCurrentText(renderedText);
         
         // 获取打字机速度
-        const nodeData = story.nodes.find(n => n.id === node.id)?.data as any;
-        setTypewriterSpeed(nodeData?.typewriterSpeed || 0);
+        setTypewriterSpeed(scene.content.typewriterSpeed || 0);
         
-        if (node.image?.imagePath) {
-          setBackground(await resolveAssetUrl(node.image.imagePath));
-          setNodeImage(node.image);
+        if (scene.media.background?.assetId) {
+          setBackground(await resolveAssetUrl(scene.media.background.assetId));
+          setNodeImage(scene.media.background);
         } else {
           setBackground('');
           setNodeImage(undefined);
         }
         
         // 构建角色立绘URL
-        const newCharacterImages: CharacterImages = {};
-        if (node.characterImages?.left?.imagePath) {
-          newCharacterImages.left = {
-            ...node.characterImages.left,
-            imagePath: await resolveAssetUrl(node.characterImages.left.imagePath),
-          };
-        }
-        if (node.characterImages?.center?.imagePath) {
-          newCharacterImages.center = {
-            ...node.characterImages.center,
-            imagePath: await resolveAssetUrl(node.characterImages.center.imagePath),
-          };
-        }
-        if (node.characterImages?.right?.imagePath) {
-          newCharacterImages.right = {
-            ...node.characterImages.right,
-            imagePath: await resolveAssetUrl(node.characterImages.right.imagePath),
+        const newCharacterImages: ResolvedCharacters = {};
+        for (const character of scene.media.characters ?? []) {
+          const position = character.horizontalPosition ?? 'center';
+          newCharacterImages[position] = {
+            ...character,
+            url: await resolveAssetUrl(character.assetId),
           };
         }
         setCharacterImages(newCharacterImages);
         
-        // 加载热区数据（从StoryNode的pluginData中获取）
-        const imageHotspots = nodeData?.pluginData?.['image-hotspots'] || [];
-        setHotspots(imageHotspots);
+        setHotspots(scene.media.hotspots ?? []);
         
         // 加载对话框UI配置
-        const uiConfig = nodeData?.pluginData?.['ui-config'] || {};
+        const uiConfig = (scene.extensionData['ui-config'] ?? {}) as Record<string, unknown>;
+        const numberSetting = (key: string, fallback: number) => typeof uiConfig[key] === 'number' ? uiConfig[key] as number : fallback;
+        const positionSetting = uiConfig.dialogBoxPosition === 'top' || uiConfig.dialogBoxPosition === 'center' || uiConfig.dialogBoxPosition === 'bottom'
+          ? uiConfig.dialogBoxPosition
+          : 'bottom';
         setDialogUIConfig({
-          position: uiConfig.dialogBoxPosition || 'bottom',
-          height: uiConfig.dialogBoxHeight || 200,
-          width: uiConfig.dialogBoxWidth || 90,
-          opacity: uiConfig.dialogBoxOpacity ?? 0.85,
-          padding: uiConfig.dialogBoxPadding || 24,
-          radius: uiConfig.dialogBoxRadius || 12,
-          blur: uiConfig.dialogBoxBlur ?? 15,
-          fontSize: uiConfig.dialogBoxFontSize || 18
+          position: positionSetting,
+          height: numberSetting('dialogBoxHeight', 200),
+          width: numberSetting('dialogBoxWidth', 90),
+          opacity: numberSetting('dialogBoxOpacity', 0.85),
+          padding: numberSetting('dialogBoxPadding', 24),
+          radius: numberSetting('dialogBoxRadius', 12),
+          blur: numberSetting('dialogBoxBlur', 15),
+          fontSize: numberSetting('dialogBoxFontSize', 18)
         });
         
-        setGameEnded(node.type === 'ending');
+        setCurrentChoices(snapshot.availableChoices);
+        setGameEnded(snapshot.status === 'ended');
       },
-      onChoicesChange: (choices) => {
-        setCurrentChoices(choices);
-      },
-      onExit: () => navigate('/')
-    });
+    }, undefined,
+    pluginSystem.listContributions('rulePack').map(item => item.value),
+    pluginSystem.getContribution('runtime', 'variables'));
     
     playerRef.current = player;
     
-    const slots = player.getSaveSlots();
+    const slots = player.listSaveSlots();
     const hasData = slots.some(slot => slot.exists);
     setHasSaveData(hasData);
   }
 
   async function handleStartGame(): Promise<void> {
     if (!playerRef.current) return;
-    await playerRef.current.start(story);
+    playerRef.current.start(startSceneId);
     setGameStarted(true);
   }
 
@@ -196,13 +184,13 @@ function VisualNovelPlayer({ story }: Props): JSX.Element {
 
   function handleChoice(choiceId: string): void {
     if (playerRef.current) {
-      playerRef.current.makeChoice(choiceId);
+      playerRef.current.choose(choiceId);
     }
   }
 
   function handleNewGame(): void {
     if (playerRef.current) {
-      playerRef.current.executeRestart();
+      playerRef.current.restart();
     }
   }
 
@@ -225,14 +213,18 @@ function VisualNovelPlayer({ story }: Props): JSX.Element {
   }
 
   return (
-    <div className="vn-player">
-      <button className="vn-menu-button" onClick={() => setShowGameMenu(true)}>
+    <div
+      className="vn-player"
+      data-player-template="builtin.visual-novel"
+      data-scene-variant={story.presentation.sceneVariants[currentSceneId] ?? 'default'}
+    >
+      <button className="vn-menu-button" data-player-menu onClick={() => setShowGameMenu(true)}>
         ☰
       </button>
       
       {showGameMenu && playerRef.current && (
         <GameMenu
-          playerCore={playerRef.current}
+          playerController={playerRef.current}
           onClose={() => setShowGameMenu(false)}
           onNewGame={handleNewGame}
           onExit={handleExit}
@@ -275,11 +267,13 @@ function VisualNovelPlayer({ story }: Props): JSX.Element {
           }}>
             {hotspots.map((hotspot) => {
               return (
-                <div
+                <button
+                  type="button"
+                  aria-label={hotspot.label}
                   key={hotspot.id}
                   onClick={() => {
                     if (playerRef.current) {
-                      playerRef.current.jumpToNode(hotspot.targetNodeId);
+                      playerRef.current.useHotspot(hotspot.id);
                     }
                   }}
                   style={{
@@ -289,7 +283,9 @@ function VisualNovelPlayer({ story }: Props): JSX.Element {
                     width: `${hotspot.width * 100}%`,
                     height: `${hotspot.height * 100}%`,
                     cursor: 'pointer',
-                    background: 'transparent'
+                    background: 'transparent',
+                    border: 0,
+                    padding: 0
                   }}
                 />
               );
@@ -338,7 +334,7 @@ function VisualNovelPlayer({ story }: Props): JSX.Element {
                 }}
               >
                 <img
-                  src={image.imagePath}
+                  src={image.url}
                   alt={`Character ${key}`}
                   style={{
                     maxWidth: '90vw',

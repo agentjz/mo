@@ -7,7 +7,7 @@ import { useLayoutEffect, useRef } from 'react';
 import * as Blockly from 'blockly';
 import { javascriptGenerator } from 'blockly/javascript';
 import type { BlocklyWorkspaceState } from '../types/blockly';
-import type { VariableDefinition } from '../types/index.ts';
+import type { VariableDefinition } from '../domain/story/document.ts';
 import { useTheme } from '../contexts/ThemeContext';
 import { usePluginSystem } from '../contexts/PluginContext';
 import { initializeBlockly, createCustomToolbox } from '../utils/blocklyInit';
@@ -62,7 +62,7 @@ function BlocklyEditor({
     try {
       // 创建工作区
       const workspace = Blockly.inject(blocklyDivRef.current, {
-        toolbox,
+        toolbox: toolbox as unknown as Blockly.utils.toolbox.ToolboxDefinition,
         theme: Blockly.Themes.Zelos,  // 统一使用 Zelos 主题（深浅色都有更好的对比度）
         grid: {
           spacing: 20,
@@ -110,7 +110,8 @@ function BlocklyEditor({
       // 加载初始状态
       if (initialState) {
         try {
-          Blockly.serialization.workspaces.load(initialState, workspace);
+          const { generatedCode: _generatedCode, ...serializedState } = initialState;
+          Blockly.serialization.workspaces.load(serializedState, workspace);
           console.log('[BlocklyEditor] Loaded initial state');
         } catch (error) {
           console.error('[BlocklyEditor] Failed to load initial state:', error);
@@ -135,7 +136,10 @@ function BlocklyEditor({
         workspace.addChangeListener(() => {
           try {
             const state = Blockly.serialization.workspaces.save(workspace);
-            onChange(state as BlocklyWorkspaceState);
+            onChange({
+              ...state as BlocklyWorkspaceState,
+              generatedCode: generateCodeFromLiveWorkspace(workspace),
+            });
           } catch (error) {
             console.error('[BlocklyEditor] Failed to save state:', error);
           }
@@ -188,7 +192,8 @@ export function generateCodeFromWorkspace(state: BlocklyWorkspaceState): string 
 
   try {
     // 加载状态
-    Blockly.serialization.workspaces.load(state, workspace);
+    const { generatedCode: _generatedCode, ...serializedState } = state;
+    Blockly.serialization.workspaces.load(serializedState, workspace);
     
     // 生成代码
     const code = javascriptGenerator.workspaceToCode(workspace);
@@ -201,6 +206,16 @@ export function generateCodeFromWorkspace(state: BlocklyWorkspaceState): string 
     workspace.dispose();
     tempDiv.remove();
   }
+}
+
+function generateCodeFromLiveWorkspace(workspace: Blockly.Workspace): string {
+  let code = javascriptGenerator.workspaceToCode(workspace).replace(/^var\s+[^;]+;[\s\n]*/gm, '');
+  const topBlocks = workspace.getTopBlocks(false);
+  if (topBlocks.length === 1 && topBlocks[0].outputConnection !== null) {
+    const expression = code.trim().replace(/;$/, '');
+    if (expression && !expression.startsWith('return')) code = `return ${expression};`;
+  }
+  return code;
 }
 
 /**

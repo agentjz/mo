@@ -149,6 +149,17 @@ body {
   -ms-overflow-style: none !important;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* ============= Blockly 编辑器样式 ============= */
 
 /* Blockly 工作区滚动条 - 恢复显示（让积木块可以拖动到底部） */

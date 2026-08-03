@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import type { PlayerCore } from '../player/PlayerCore.ts';
+import type { PlayerController } from '../application/player/PlayerController.ts';
 
 interface GameMenuProps {
-  playerCore: PlayerCore;
+  playerController: PlayerController;
   onClose: () => void;
   onNewGame: () => void;
   onExit: () => void;
@@ -10,7 +10,7 @@ interface GameMenuProps {
 
 type MenuView = 'main' | 'save' | 'load' | 'worldmap' | 'player';
 
-function GameMenu({ playerCore, onClose, onNewGame, onExit }: GameMenuProps): JSX.Element {
+function GameMenu({ playerController, onClose, onNewGame, onExit }: GameMenuProps): JSX.Element {
   const [currentView, setCurrentView] = useState<MenuView>('main');
   const [feedback, setFeedback] = useState<string>('');
   const [playerTab, setPlayerTab] = useState<'attributes' | 'inventory'>('attributes');
@@ -28,7 +28,7 @@ function GameMenu({ playerCore, onClose, onNewGame, onExit }: GameMenuProps): JS
   };
 
   const handleSave = (slotId: number) => {
-    const success = playerCore.saveToSlot(slotId);
+    const success = playerController.saveSlot(slotId);
     if (success) {
       showFeedback(`已保存到槽位 ${slotId}`);
     } else {
@@ -37,7 +37,7 @@ function GameMenu({ playerCore, onClose, onNewGame, onExit }: GameMenuProps): JS
   };
 
   const handleLoad = (slotId: number) => {
-    const node = playerCore.loadFromSlot(slotId);
+    const node = playerController.loadSlot(slotId);
     if (node) {
       showFeedback(`已加载槽位 ${slotId}`);
       setTimeout(() => onClose(), 500);
@@ -47,7 +47,7 @@ function GameMenu({ playerCore, onClose, onNewGame, onExit }: GameMenuProps): JS
   };
 
   const handleJumpToNode = (nodeId: string) => {
-    playerCore.jumpToNode(nodeId);
+    playerController.jump(nodeId);
     onClose();
   };
 
@@ -71,7 +71,7 @@ function GameMenu({ playerCore, onClose, onNewGame, onExit }: GameMenuProps): JS
   );
 
   const renderSaveMenu = () => {
-    const slots = playerCore.getSaveSlots();
+    const slots = playerController.listSaveSlots();
     
     return (
       <div className="game-menu-slots">
@@ -84,7 +84,7 @@ function GameMenu({ playerCore, onClose, onNewGame, onExit }: GameMenuProps): JS
             </div>
             {slot.exists && (
               <div className="game-menu-slot-info">
-                <div>{slot.nodeName}</div>
+                <div>{slot.sceneName}</div>
                 <div className="game-menu-slot-time">
                   {slot.saveTime ? new Date(slot.saveTime).toLocaleString('zh-CN') : ''}
                 </div>
@@ -100,7 +100,7 @@ function GameMenu({ playerCore, onClose, onNewGame, onExit }: GameMenuProps): JS
   };
 
   const renderLoadMenu = () => {
-    const slots = playerCore.getSaveSlots();
+    const slots = playerController.listSaveSlots();
     
     return (
       <div className="game-menu-slots">
@@ -115,7 +115,7 @@ function GameMenu({ playerCore, onClose, onNewGame, onExit }: GameMenuProps): JS
             </div>
             {slot.exists && (
               <div className="game-menu-slot-info">
-                <div>{slot.nodeName}</div>
+                <div>{slot.sceneName}</div>
                 <div className="game-menu-slot-time">
                   {slot.saveTime ? new Date(slot.saveTime).toLocaleString('zh-CN') : ''}
                 </div>
@@ -131,7 +131,7 @@ function GameMenu({ playerCore, onClose, onNewGame, onExit }: GameMenuProps): JS
   };
 
   const renderWorldMap = () => {
-    const visitedNodes = playerCore.getVisitedNodes();
+    const visitedNodes = playerController.listVisitedScenes();
     
     return (
       <div className="game-menu-worldmap">
@@ -143,11 +143,11 @@ function GameMenu({ playerCore, onClose, onNewGame, onExit }: GameMenuProps): JS
           <div className="game-menu-node-list">
             {visitedNodes.map(node => (
               <button
-                key={node.nodeId}
+                key={node.sceneId}
                 className="game-menu-node-item"
-                onClick={() => handleJumpToNode(node.nodeId)}
+                onClick={() => handleJumpToNode(node.sceneId)}
               >
-                <div className="game-menu-node-name">{node.nodeName}</div>
+                <div className="game-menu-node-name">{node.sceneName}</div>
                 <div className="game-menu-node-meta">
                   访问 {node.visitCount} 次
                 </div>
@@ -160,18 +160,15 @@ function GameMenu({ playerCore, onClose, onNewGame, onExit }: GameMenuProps): JS
   };
 
   const renderPlayer = () => {
-    const variables = playerCore.getDisplayVariables();
-    const story = playerCore.getCurrentStory();
+    const variables = playerController.listDisplayVariables();
     
     // 根据type分类变量
     const attributes = variables.filter(v => {
-      const varDef = story?.variables?.find(vd => vd.id === v.id);
-      return varDef?.type === 'number' || varDef?.type === 'string';
+      return v.type === 'number' || v.type === 'string';
     });
     
     const inventory = variables.filter(v => {
-      const varDef = story?.variables?.find(vd => vd.id === v.id);
-      return varDef?.type === 'boolean';
+      return v.type === 'boolean';
     });
     
     return (
@@ -241,7 +238,7 @@ function GameMenu({ playerCore, onClose, onNewGame, onExit }: GameMenuProps): JS
 
   return (
     <div className="game-menu-overlay" onClick={onClose}>
-      <div className="game-menu-panel" onClick={(e) => e.stopPropagation()}>
+      <div className="game-menu-panel" role="dialog" aria-modal="true" aria-label="游戏菜单" onClick={(e) => e.stopPropagation()}>
         <div className="game-menu-header">
           <h2>菜单</h2>
           <button className="game-menu-close" onClick={handleBack}>

@@ -3,7 +3,7 @@
  * 职责：可视化编辑故事节点
  */
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactFlow, {
   MiniMap,
@@ -15,12 +15,6 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
-import { workspaceService } from '../application/workspace/WorkspaceService.ts';
-import { StorySaveCoordinator, type SaveState } from '../application/editor/StorySaveCoordinator.ts';
-import { workspaceRepository } from '../platform/storage/WorkspaceRepository.ts';
-import { workspaceChannel } from '../platform/storage/WorkspaceChannel.ts';
-import { acquireStoryWriteLock, type StoryWriteLockHandle } from '../platform/storage/StoryWriteLock.ts';
-import type { Story } from '../types/index.ts';
 import { usePluginSystem } from '../contexts/PluginContext.tsx';
 import StoryNodeComponent from '../components/StoryNode.tsx';
 import EditorSidebar from '../components/EditorSidebar.tsx';
@@ -29,6 +23,7 @@ import EdgeEditPanel from '../components/EdgeEditPanel.tsx';
 import Loading from '../components/ui/Loading.tsx';
 import notification from '../utils/notification.ts';
 import { useStoryEditor } from '../hooks/useStoryEditor.ts';
+import { useEditorSession } from '../hooks/useEditorSession.ts';
 import '../styles/editor.css';
 import '../styles/editor-tabs.css';
 
@@ -40,25 +35,28 @@ function Editor(): JSX.Element {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const pluginSystem = usePluginSystem();
-  const [loading, setLoading] = useState<boolean>(true);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
   const [highlightNodeId, setHighlightNodeId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [validationResult, setValidationResult] = useState<any>(null);
   const [storyAnalysis, setStoryAnalysis] = useState<any>(null);
   const [analysisStatus, setAnalysisStatus] = useState<string>('');
-  const [saveState, setSaveState] = useState<SaveState>('idle');
-  const [readOnly, setReadOnly] = useState(false);
   const [tagFilter, setTagFilter] = useState<string>('all');
 
   const editor = useStoryEditor();
   const nodeEditPanelRef = useRef<BottomEditPanelRef>(null);
-  const coordinatorRef = useRef<StorySaveCoordinator | null>(null);
-  const writeLockRef = useRef<StoryWriteLockHandle | null>(null);
-  const unsubscribeRef = useRef<(() => void) | null>(null);
-  const createdAtRef = useRef<string>('');
-  const skipInitialSaveRef = useRef(true);
-  const mountedRef = useRef(true);
+  const {
+    loading,
+    readOnly,
+    saveState,
+    canUndo,
+    canRedo,
+    createStorySnapshot,
+    undo: handleUndo,
+    redo: handleRedo,
+    flushAndNavigate,
+    queueSnapshot,
+  } = useEditorSession({ storyId: id, editor, nodeEditPanelRef, navigate });
 
   const pureNodes = useMemo(() => {
     return editor.nodes.map(node => ({
@@ -118,105 +116,10 @@ function Editor(): JSX.Element {
     });
   }, [tagFilter]);
 
-  const loadStory = useCallback(async () => {
-    if (!id) return;
-
-    try {
-      const writeLock = await acquireStoryWriteLock(id);
-      if (!mountedRef.current) {
-        writeLock.release();
-        return;
-      }
-      writeLockRef.current = writeLock;
-      setReadOnly(!writeLock.acquired);
-
-      const stored = await workspaceService.getStoredStory(id);
-      if (!stored) throw new Error('故事不存在');
-      createdAtRef.current = stored.story.createdAt;
-      editor.loadStoryData(stored.story.nodes, stored.story.edges, stored.story.meta, stored.story.variables);
-      coordinatorRef.current = new StorySaveCoordinator(
-        stored.revision,
-        workspaceRepository,
-        workspaceChannel,
-        {
-          onStateChange: setSaveState,
-          onError: error => {
-            if (error instanceof Error && error.name === 'RevisionConflictError') {
-              notification.error('作品已在其他标签页更新，当前页面已停止保存');
-            } else {
-              notification.error(error instanceof Error ? error.message : '保存失败');
-            }
-          },
-        },
-      );
-      unsubscribeRef.current = workspaceChannel.subscribe(message => {
-        if (message.storyId !== id) return;
-        coordinatorRef.current?.markExternalRevision(message.revision);
-        if (coordinatorRef.current?.currentState === 'conflict') {
-          notification.warning('检测到其他标签页的更新');
-        }
-      });
-      skipInitialSaveRef.current = true;
-      setLoading(false);
-    } catch (error) {
-      console.error('加载失败:', error);
-      notification.error('加载故事失败');
-      navigate('/app');
-      setLoading(false);
-    }
-  }, [id, editor.loadStoryData, navigate]);
-
-  const createStorySnapshot = useCallback((): Story | null => {
-    if (!id) return null;
-    let nodes = editor.nodes;
-    if (editor.selectedNode && nodeEditPanelRef.current) {
-      const editingData = nodeEditPanelRef.current.applyChanges();
-      if (editingData) {
-        nodes = nodes.map(node => node.id === editor.selectedNode?.id
-          ? { ...node, data: { ...node.data, ...editingData } }
-          : node);
-      }
-    }
-    const now = new Date().toISOString();
-    return {
-      id,
-      meta: structuredClone(editor.storyMeta),
-      nodes: nodes.map(node => ({
-        id: node.id,
-        type: 'storyNode' as const,
-        position: node.position,
-        data: node.data,
-      })),
-      edges: editor.edges.map(edge => ({
-        id: edge.id,
-        source: edge.source,
-        target: edge.target,
-        sourceHandle: edge.sourceHandle,
-        targetHandle: edge.targetHandle,
-        type: edge.type,
-        animated: edge.animated,
-        markerEnd: edge.markerEnd,
-        style: edge.style,
-      })),
-      variables: structuredClone(editor.variables),
-      createdAt: createdAtRef.current,
-      updatedAt: now,
-    };
-  }, [editor.edges, editor.nodes, editor.selectedNode, editor.storyMeta, editor.variables, id]);
-
-  const flushAndNavigate = useCallback(async (target: string) => {
-    if (!readOnly) {
-      const snapshot = createStorySnapshot();
-      if (snapshot) coordinatorRef.current?.queue(snapshot);
-      await coordinatorRef.current?.flush();
-      if (coordinatorRef.current?.currentState === 'error' || coordinatorRef.current?.currentState === 'conflict') return;
-    }
-    navigate(target);
-  }, [createStorySnapshot, navigate, readOnly]);
-
   const performAnalysis = useCallback(() => {
-    return pluginSystem.getContribution('analyzer', 'story')?.analyze(pureNodes, pureEdges) ?? null;
-  }, [pluginSystem, pureNodes, pureEdges]);
+    const snapshot = createStorySnapshot();
+    return snapshot ? pluginSystem.getContribution('analyzer', 'story')?.analyze(snapshot.document) ?? null : null;
+  }, [createStorySnapshot, pluginSystem]);
 
   const handleValidate = useCallback(() => {
     const validator = pluginSystem.getContribution('validator', 'story');
@@ -225,7 +128,9 @@ function Editor(): JSX.Element {
       return;
     }
     
-    const result = validator.validate(pureNodes, pureEdges);
+    const snapshot = createStorySnapshot();
+    if (!snapshot) return;
+    const result = validator.validate(snapshot.document);
     setValidationResult(result);
     
     const errorCount = result.errors.length;
@@ -238,7 +143,7 @@ function Editor(): JSX.Element {
     } else {
       notification.warning(`发现 ${warningCount} 个警告`);
     }
-  }, [pluginSystem, pureNodes, pureEdges]);
+  }, [createStorySnapshot, pluginSystem]);
 
   const handleAutoLayout = useCallback((layoutType: 'hierarchical' | 'radial' = 'hierarchical') => {
     const layoutName = layoutType === 'hierarchical' ? '层次' : '辐射';
@@ -268,57 +173,18 @@ function Editor(): JSX.Element {
         return;
       }
       
-      const layoutedNodes = layout.layout(pureNodes, pureEdges, analysis);
-      editor.setNodes(layoutedNodes as any);
+      const snapshot = createStorySnapshot();
+      if (!snapshot) return;
+      const layoutedState = layout.layout(snapshot.document, snapshot.editorState, analysis);
+      editor.setNodes(nodes => nodes.map(node => ({
+        ...node,
+        position: layoutedState.scenePositions[node.id] ?? node.position,
+      })));
       
       setAnalysisStatus('布局完成');
       setTimeout(() => setAnalysisStatus(''), 2000);
     }, 50);
-  }, [storyAnalysis, pluginSystem, pureNodes, pureEdges, editor, performAnalysis]);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    if (id) {
-      void loadStory();
-    }
-    return () => {
-      mountedRef.current = false;
-      unsubscribeRef.current?.();
-      unsubscribeRef.current = null;
-      const coordinator = coordinatorRef.current;
-      const writeLock = writeLockRef.current;
-      coordinatorRef.current = null;
-      writeLockRef.current = null;
-      if (coordinator) {
-        void coordinator.flush().finally(() => {
-          coordinator.dispose();
-          writeLock?.release();
-        });
-      } else {
-        writeLock?.release();
-      }
-    };
-  }, [id, loadStory]);
-
-  useEffect(() => {
-    if (loading || readOnly || !coordinatorRef.current) return;
-    if (skipInitialSaveRef.current) {
-      skipInitialSaveRef.current = false;
-      return;
-    }
-    const snapshot = createStorySnapshot();
-    if (snapshot) coordinatorRef.current.queue(snapshot);
-  }, [createStorySnapshot, editor.edges, editor.nodes, editor.storyMeta, editor.variables, loading, readOnly]);
-
-  useEffect(() => {
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (!coordinatorRef.current?.hasPendingWrite) return;
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, []);
+  }, [storyAnalysis, pluginSystem, editor, performAnalysis, createStorySnapshot]);
 
   const highlightedNodes = useMemo(() => {
     if (!highlightNodeId) return new Set<string>();
@@ -495,13 +361,14 @@ function Editor(): JSX.Element {
         }))}
         storyStats={stats}
         keyDecisionNodes={keyDecisionNodes}
-        onUndo={() => { if (!readOnly) editor.undo(); }}
-        onRedo={() => { if (!readOnly) editor.redo(); }}
-        canUndo={!readOnly && editor.canUndo}
-        canRedo={!readOnly && editor.canRedo}
+        onUndo={() => { if (!readOnly) handleUndo(); }}
+        onRedo={() => { if (!readOnly) handleRedo(); }}
+        canUndo={!readOnly && canUndo}
+        canRedo={!readOnly && canRedo}
         tagFilter={tagFilter}
         allTags={allTags}
         onTagFilterChange={setTagFilter}
+        selectedSceneId={editor.selectedNode?.id ?? null}
       />
 
       <div 
@@ -564,10 +431,7 @@ function Editor(): JSX.Element {
           onDeleteChoice={editor.deleteChoice}
           globalVariables={editor.variables}
           storyMeta={editor.storyMeta}
-          onDraftChange={() => {
-            const snapshot = createStorySnapshot();
-            if (snapshot) coordinatorRef.current?.queue(snapshot);
-          }}
+          onDraftChange={queueSnapshot}
         />
       )}
 

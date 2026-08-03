@@ -5,9 +5,9 @@
 **在线使用：** [https://luckymaomi.github.io/mo/](https://luckymaomi.github.io/mo/)
 
 [![React](https://img.shields.io/badge/React-18.2.0-00D8FF?style=plastic&logo=react&logoColor=00D8FF&labelColor=282c34)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.3.3-3178C6?style=plastic&logo=typescript&logoColor=white&labelColor=0F1419)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-7.0.2-3178C6?style=plastic&logo=typescript&logoColor=white&labelColor=0F1419)](https://www.typescriptlang.org/)
 [![React Flow](https://img.shields.io/badge/React_Flow-11.10.4-FF6B6B?style=plastic&logoColor=white&labelColor=2D2D2D)](https://reactflow.dev/)
-[![Blockly](https://img.shields.io/badge/Blockly-11.1.1-4AB8FF?style=plastic&logoColor=white&labelColor=1A1A1A)](https://developers.google.com/blockly)
+[![Blockly](https://img.shields.io/badge/Blockly-13.2.0-4AB8FF?style=plastic&logoColor=white&labelColor=1A1A1A)](https://developers.google.com/blockly)
 ![License](https://img.shields.io/badge/License-MIT-00C853?style=plastic&logoColor=white&labelColor=1B5E20)
 
 ## 这是什么
@@ -28,9 +28,11 @@
 
 **插件和模组** - 扩展编辑器、播放器和运行时规则，让作品不止一种玩法。
 
-**视觉小说播放器** - 背景图、角色立绘、对话框和选项组成沉浸式阅读体验。
+**十二套播放器模板** - 保留视觉小说与聊天体验，并提供书页、剧场、档案、手账等不同叙事结构。
 
 **单文件导出** - 生成独立 HTML 文件，无需服务器，双击即可游玩。
+
+**整库备份** - 把当前浏览器中的全部作品、图片和设置导出为一个 ZIP，也可以用 ZIP 完整覆盖恢复工作区。
 
 ## 适合创作什么
 
@@ -47,7 +49,7 @@
 1. 创建开始节点，写下“你站在岔路口”。
 2. 添加两个选项：“向左”和“向右”。
 3. 创建两个新节点，把选项连接过去。
-4. 点击预览，体验你的第一个分支故事。
+4. 点击播放，体验你的第一个分支故事。
 
 故事就这样开始了。
 

@@ -1,6 +1,6 @@
 /**
  * PluginSystem 单元测试
- * 测试插件系统的注册、启用、禁用、钩子触发等功能
+ * 测试插件系统的注册、启用、禁用、贡献和失败回滚
  */
 
 import { describe, test, expect, beforeEach } from 'vitest';
@@ -287,93 +287,6 @@ describe('PluginSystem - 互斥规则', () => {
   });
 });
 
-describe('PluginSystem - 钩子系统', () => {
-  let pluginSystem: PluginSystem;
-  
-  beforeEach(() => {
-    pluginSystem = new PluginSystem();
-  });
-
-  test('trigger() 应该按顺序执行钩子', async () => {
-    const executionOrder: number[] = [];
-    
-    const plugin1: Plugin = {
-      metadata: {
-        id: 'plugin.1',
-        name: '插件1',
-        version: '1.0.0',
-        author: '测试',
-        description: '测试',
-        category: 'tool'
-      },
-      install: async () => {},
-      hooks: {
-        'content:process': (data: any) => {
-          executionOrder.push(1);
-          return data;
-        }
-      }
-    };
-    
-    const plugin2: Plugin = {
-      metadata: {
-        id: 'plugin.2',
-        name: '插件2',
-        version: '1.0.0',
-        author: '测试',
-        description: '测试',
-        category: 'tool'
-      },
-      install: async () => {},
-      hooks: {
-        'content:process': (data: any) => {
-          executionOrder.push(2);
-          return data;
-        }
-      }
-    };
-    
-    await pluginSystem.register(plugin1);
-    await pluginSystem.register(plugin2);
-    
-    pluginSystem.trigger('content:process', { text: 'test' });
-    
-    expect(executionOrder).toEqual([1, 2]);
-  });
-
-  test('trigger() 应该传递数据', async () => {
-    const plugin: Plugin = {
-      metadata: {
-        id: 'plugin.transform',
-        name: '转换插件',
-        version: '1.0.0',
-        author: '测试',
-        description: '测试',
-        category: 'tool'
-      },
-      install: async () => {},
-      hooks: {
-        'content:process': (data: any) => {
-          return { ...data, text: data.text.toUpperCase() };
-        }
-      }
-    };
-    
-    await pluginSystem.register(plugin);
-    
-    const result = pluginSystem.trigger('content:process', { text: 'hello' });
-    
-    expect(result.text).toBe('HELLO');
-  });
-
-  test('trigger() 没有钩子时应该返回原数据', () => {
-    const data = { text: 'test' };
-    const result = pluginSystem.trigger('content:process', data);
-    
-    expect(result).toEqual(data);
-  });
-});
-
 describe('PluginSystem - 启用/禁用', () => {
   let pluginSystem: PluginSystem;
   
@@ -424,34 +337,6 @@ describe('PluginSystem - 启用/禁用', () => {
     expect(pluginSystem.isPluginEnabled('test.plugin')).toBe(true);
   });
 
-  test('禁用插件后钩子不应该执行', async () => {
-    let hookExecuted = false;
-    
-    const plugin: Plugin = {
-      metadata: {
-        id: 'test.plugin',
-        name: '测试插件',
-        version: '1.0.0',
-        author: '测试',
-        description: '测试',
-        category: 'tool'
-      },
-      install: async () => {},
-      hooks: {
-        'content:process': (data: any) => {
-          hookExecuted = true;
-          return data;
-        }
-      }
-    };
-    
-    await pluginSystem.register(plugin);
-    await pluginSystem.disable('test.plugin');
-    
-    pluginSystem.trigger('content:process', { text: 'test' });
-    
-    expect(hookExecuted).toBe(false);
-  });
 });
 
 describe('PluginSystem - 生命周期隔离', () => {
@@ -589,24 +474,29 @@ describe('PluginSystem - 生命周期隔离', () => {
     expect(persisted).toBe(true);
   });
 
-  test('运行期钩子失败时标记插件健康状态', async () => {
+  test('设置校验或持久化失败时恢复原设置', async () => {
     const pluginSystem = new PluginSystem();
+    let settings = { density: 1 };
     const plugin: Plugin = {
       metadata: {
-        id: 'plugin.runtime-error', name: '运行故障', version: '1.0.0', author: '测试',
-        description: '运行故障', category: 'tool',
+        id: 'plugin.settings', name: '设置插件', version: '1.0.0', author: '测试',
+        description: '设置回滚', category: 'tool',
       },
       install: async () => {},
-      hooks: {
-        'content:process': () => { throw new Error('hook failed'); },
+      getSettings: () => ({ ...settings }),
+      updateSettings: next => {
+        if (typeof next.density !== 'number' || next.density < 1) throw new Error('density invalid');
+        settings = { density: next.density };
       },
     };
     await pluginSystem.register(plugin);
 
-    pluginSystem.trigger('content:process', { text: 'test' });
+    await expect(pluginSystem.updatePluginSettings('plugin.settings', { density: 0 })).rejects.toThrow('density invalid');
+    expect(settings).toEqual({ density: 1 });
 
-    expect(pluginSystem.getPlugin('plugin.runtime-error')?.health).toBe('degraded');
-    expect(pluginSystem.getPlugin('plugin.runtime-error')?.error).toBe('hook failed');
+    pluginSystem.onConfigChange(() => { throw new Error('persistence failed'); });
+    await expect(pluginSystem.updatePluginSettings('plugin.settings', { density: 2 })).rejects.toThrow('persistence failed');
+    expect(settings).toEqual({ density: 1 });
   });
 });
 

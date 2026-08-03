@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react';
-import type { VariableDefinition } from '../types/index.ts';
+import type { VariableDefinition } from '../domain/story/document.ts';
 
 interface VariableManagerProps {
   variables: VariableDefinition[];

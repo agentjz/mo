@@ -3,38 +3,43 @@ import { describe, expect, it, vi } from 'vitest';
 import { StorySaveCoordinator } from '../../src/application/editor/StorySaveCoordinator.ts';
 import { WorkspaceRepository } from '../../src/platform/storage/WorkspaceRepository.ts';
 import { WorkspaceChannel } from '../../src/platform/storage/WorkspaceChannel.ts';
-import type { Story } from '../../src/types/index.ts';
-
-function story(): Story {
-  return {
-    id: 'coordinator-story',
-    meta: { title: 'A', author: 'A', description: '', start_node: 1 },
-    nodes: [{
-      id: '1', type: 'storyNode', position: { x: 0, y: 0 },
-      data: { nodeId: 1, text: 'A', choices: [], nodeType: 'start' },
-    }],
-    edges: [],
-    variables: [],
-    createdAt: '2026-08-02T00:00:00.000Z',
-    updatedAt: '2026-08-02T00:00:00.000Z',
-  };
-}
+import { canonicalEditorState, canonicalStory } from '../fixtures/canonicalStory.ts';
 
 describe('StorySaveCoordinator', () => {
-  it('合并连续变更并保存最新快照', async () => {
+  it('合并连续变更并保存最新文档与编辑投影', async () => {
     const repository = new WorkspaceRepository(`mo-coordinator-${crypto.randomUUID()}`);
-    const created = await repository.createStory(story());
+    const document = canonicalStory();
+    document.scenes[1].media = {};
+    const created = await repository.createStory(document, canonicalEditorState());
     const channel = new WorkspaceChannel();
     const onSaved = vi.fn();
     const coordinator = new StorySaveCoordinator(created.revision, repository, channel, { onSaved }, 1);
-
-    coordinator.queue({ ...created.story, meta: { ...created.story.meta, title: 'B' } });
-    coordinator.queue({ ...created.story, meta: { ...created.story.meta, title: 'C' } });
+    const second = structuredClone(created.document);
+    second.meta.title = 'B';
+    const latest = structuredClone(created.document);
+    latest.meta.title = 'C';
+    coordinator.queue({ document: second, editorState: created.editorState });
+    coordinator.queue({ document: latest, editorState: created.editorState });
     await coordinator.flush();
-
-    expect((await repository.getStory(created.id))?.story.meta.title).toBe('C');
+    expect((await repository.getStory(created.id))?.document.meta.title).toBe('C');
     expect(onSaved).toHaveBeenCalledTimes(1);
     expect(coordinator.currentState).toBe('idle');
+    coordinator.dispose();
+    channel.close();
+  });
+
+  it('把多个本地创作事务折叠为一个带目标 revision 的原子写入', async () => {
+    const repository = new WorkspaceRepository(`mo-coordinator-${crypto.randomUUID()}`);
+    const document = canonicalStory();
+    document.scenes[1].media = {};
+    const created = await repository.createStory(document, canonicalEditorState());
+    const channel = new WorkspaceChannel();
+    const coordinator = new StorySaveCoordinator(created.revision, repository, channel, {}, 1);
+    const changed = structuredClone(created.document);
+    changed.meta.title = '折叠事务';
+    coordinator.queue({ document: changed, editorState: created.editorState, revision: 5 });
+    await coordinator.flush();
+    expect(await repository.getStory(created.id)).toMatchObject({ revision: 5, document: { meta: { title: '折叠事务' } } });
     coordinator.dispose();
     channel.close();
   });

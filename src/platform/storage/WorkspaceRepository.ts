@@ -1,7 +1,12 @@
 import { deleteDB, openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import { FOG_MYSTERY_TEMPLATE, SURVIVAL_GAME_TEMPLATE } from '../../domain/story/templates/index.ts';
-import { cloneStory, collectAssetIds, createStoryId, parseStory } from '../../domain/story/schema.ts';
-import type { Story } from '../../types/index.ts';
+import { cloneStoryDocument, collectAssetIds, createStoryId, parseStoryDocument, type StoryDocument } from '../../domain/story/document.ts';
+import { parseStoryEditorState, type StoryEditorState } from '../../domain/story/editorState.ts';
+import {
+  MYSTERY_SAMPLE,
+  MYSTERY_SAMPLE_EDITOR_STATE,
+  SURVIVAL_SAMPLE,
+  SURVIVAL_SAMPLE_EDITOR_STATE,
+} from '../../domain/story/samples.ts';
 import {
   RevisionConflictError,
   StorageQuotaError,
@@ -13,7 +18,7 @@ import {
 } from './types.ts';
 
 const DATABASE_NAME = 'mo-workspace';
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 const SEED_KEY = 'workspace.seeded';
 
 interface MoDatabase extends DBSchema {
@@ -47,6 +52,7 @@ export class WorkspaceRepository {
     if (!this.databasePromise) {
       this.databasePromise = openDB<MoDatabase>(this.databaseName, DATABASE_VERSION, {
         upgrade(database) {
+          for (const store of [...database.objectStoreNames]) database.deleteObjectStore(store);
           const stories = database.createObjectStore('stories', { keyPath: 'id' });
           stories.createIndex('by-updated-at', 'updatedAt');
           database.createObjectStore('assets', { keyPath: 'id' });
@@ -64,14 +70,23 @@ export class WorkspaceRepository {
 
     if (!seeded) {
       const now = new Date().toISOString();
-      for (const template of [SURVIVAL_GAME_TEMPLATE, FOG_MYSTERY_TEMPLATE]) {
-        const story = parseStory({
-          ...cloneStory(template),
+      for (const [template, templateEditorState] of [
+        [SURVIVAL_SAMPLE, SURVIVAL_SAMPLE_EDITOR_STATE],
+        [MYSTERY_SAMPLE, MYSTERY_SAMPLE_EDITOR_STATE],
+      ] as const) {
+        const document = parseStoryDocument({
+          ...cloneStoryDocument(template),
           id: createStoryId(),
           createdAt: now,
           updatedAt: now,
         });
-        await transaction.objectStore('stories').add({ id: story.id, story, revision: 1, updatedAt: now });
+        await transaction.objectStore('stories').add({
+          id: document.id,
+          document,
+          editorState: structuredClone(templateEditorState),
+          revision: 1,
+          updatedAt: now,
+        });
       }
       await transaction.objectStore('settings').put({ key: SEED_KEY, value: true });
     }
@@ -91,12 +106,14 @@ export class WorkspaceRepository {
     return stored ? structuredClone(stored) : undefined;
   }
 
-  async createStory(story: Story): Promise<StoredStory> {
-    const parsed = parseStory(story);
+  async createStory(document: StoryDocument, editorState: StoryEditorState): Promise<StoredStory> {
+    const parsed = parseStoryDocument(document);
+    const parsedEditorState = parseStoryEditorState(editorState);
     const database = await this.database();
     const stored: StoredStory = {
       id: parsed.id,
-      story: cloneStory(parsed),
+      document: cloneStoryDocument(parsed),
+      editorState: structuredClone(parsedEditorState),
       revision: 1,
       updatedAt: parsed.updatedAt,
     };
@@ -110,8 +127,14 @@ export class WorkspaceRepository {
     }
   }
 
-  async saveStory(story: Story, expectedRevision: number): Promise<StoredStory> {
-    const parsed = parseStory(story);
+  async saveStory(
+    document: StoryDocument,
+    editorState: StoryEditorState,
+    expectedRevision: number,
+    nextRevision?: number,
+  ): Promise<StoredStory> {
+    const parsed = parseStoryDocument(document);
+    const parsedEditorState = parseStoryEditorState(editorState);
     const database = await this.database();
     const transaction = database.transaction('stories', 'readwrite');
     const current = await transaction.store.get(parsed.id);
@@ -123,10 +146,18 @@ export class WorkspaceRepository {
       throw new RevisionConflictError(parsed.id, expectedRevision, actualRevision);
     }
 
+    const revision = nextRevision ?? actualRevision + 1;
+    if (!Number.isInteger(revision) || revision <= actualRevision) {
+      transaction.abort();
+      await transaction.done.catch(() => undefined);
+      throw new Error('保存 revision 必须高于当前版本');
+    }
+
     const next: StoredStory = {
       id: parsed.id,
-      story: cloneStory(parsed),
-      revision: actualRevision + 1,
+      document: cloneStoryDocument(parsed),
+      editorState: structuredClone(parsedEditorState),
+      revision,
       updatedAt: parsed.updatedAt,
     };
 
@@ -134,44 +165,6 @@ export class WorkspaceRepository {
       await transaction.store.put(next);
       await transaction.done;
       return structuredClone(next);
-    } catch (error) {
-      if (isQuotaError(error)) throw new StorageQuotaError();
-      throw error;
-    }
-  }
-
-  async importStory(story: Story): Promise<StoredStory> {
-    const now = new Date().toISOString();
-    const imported = parseStory({
-      ...cloneStory(story),
-      id: createStoryId(),
-      createdAt: now,
-      updatedAt: now,
-    });
-    return this.createStory(imported);
-  }
-
-  async importStoryWithAssets(story: Story, assets: AssetRecord[]): Promise<StoredStory> {
-    const now = new Date().toISOString();
-    const imported = parseStory({
-      ...cloneStory(story),
-      id: createStoryId(),
-      createdAt: now,
-      updatedAt: now,
-    });
-    const stored: StoredStory = {
-      id: imported.id,
-      story: imported,
-      revision: 1,
-      updatedAt: now,
-    };
-    const database = await this.database();
-    const transaction = database.transaction(['stories', 'assets'], 'readwrite');
-    try {
-      for (const asset of assets) await transaction.objectStore('assets').put(asset);
-      await transaction.objectStore('stories').add(stored);
-      await transaction.done;
-      return structuredClone(stored);
     } catch (error) {
       if (isQuotaError(error)) throw new StorageQuotaError();
       throw error;
@@ -186,7 +179,7 @@ export class WorkspaceRepository {
     const remainingStories = await transaction.objectStore('stories').getAll();
     const referenced = new Set<string>();
     for (const stored of remainingStories) {
-      for (const assetId of collectAssetIds(stored.story)) referenced.add(assetId);
+      for (const assetId of collectAssetIds(stored.document)) referenced.add(assetId);
     }
 
     let cursor = await transaction.objectStore('assets').openCursor();
@@ -249,6 +242,11 @@ export class WorkspaceRepository {
     await database.put('settings', { key, value });
   }
 
+  async removeSetting(key: string): Promise<void> {
+    const database = await this.database();
+    await database.delete('settings', key);
+  }
+
   async snapshot(): Promise<WorkspaceSnapshot> {
     const database = await this.database();
     const transaction = database.transaction(['stories', 'assets', 'settings'], 'readonly');
@@ -262,6 +260,15 @@ export class WorkspaceRepository {
   }
 
   async replaceWorkspace(snapshot: WorkspaceSnapshot): Promise<void> {
+    const validated: WorkspaceSnapshot = {
+      stories: snapshot.stories.map(stored => ({
+        ...stored,
+        document: parseStoryDocument(stored.document),
+        editorState: parseStoryEditorState(stored.editorState),
+      })),
+      assets: structuredClone(snapshot.assets),
+      settings: structuredClone(snapshot.settings),
+    };
     const database = await this.database();
     const transaction = database.transaction(['stories', 'assets', 'settings'], 'readwrite');
     try {
@@ -270,9 +277,9 @@ export class WorkspaceRepository {
         transaction.objectStore('assets').clear(),
         transaction.objectStore('settings').clear(),
       ]);
-      for (const story of snapshot.stories) await transaction.objectStore('stories').put(story);
-      for (const asset of snapshot.assets) await transaction.objectStore('assets').put(asset);
-      for (const setting of snapshot.settings) await transaction.objectStore('settings').put(setting);
+      for (const story of validated.stories) await transaction.objectStore('stories').put(story);
+      for (const asset of validated.assets) await transaction.objectStore('assets').put(asset);
+      for (const setting of validated.settings) await transaction.objectStore('settings').put(setting);
       await transaction.done;
     } catch (error) {
       if (isQuotaError(error)) throw new StorageQuotaError();

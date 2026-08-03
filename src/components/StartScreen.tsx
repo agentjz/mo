@@ -1,7 +1,7 @@
-import type { Story } from '../types/index.ts';
+import type { StoryDocument } from '../domain/story/document.ts';
 
 interface StartScreenProps {
-  story: Story;
+  story: StoryDocument;
   hasSaveData: boolean;
   onStartGame: () => void;
   onContinueGame: () => void;

@@ -43,9 +43,10 @@ export abstract class PluginBase implements Plugin {
    * 更新设置
    */
   updateSettings(settings: Record<string, unknown>): void {
-    this.settings = { ...this.settings, ...settings };
-    this.config.settings = { ...this.settings };
-    this.onSettingsUpdate(this.settings);
+    const next = { ...this.settings, ...structuredClone(settings) };
+    this.onSettingsUpdate(next);
+    this.settings = next;
+    this.config.settings = { ...next };
   }
 
   /**

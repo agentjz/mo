@@ -1,8 +1,10 @@
-import type { Story } from '../../types/index.ts';
+import type { StoryDocument } from '../../domain/story/document.ts';
+import type { StoryEditorState } from '../../domain/story/editorState.ts';
 
 export interface StoredStory {
   id: string;
-  story: Story;
+  document: StoryDocument;
+  editorState: StoryEditorState;
   revision: number;
   updatedAt: string;
 }

@@ -3,7 +3,7 @@
  * 职责：提供基础生存属性
  */
 
-import type { VariableDefinition } from '../../../types/index.js';
+import type { VariableDefinition } from '../../../domain/story/document.ts';
 
 export const SURVIVAL_VARIABLES: VariableDefinition[] = [
   { 
@@ -12,7 +12,9 @@ export const SURVIVAL_VARIABLES: VariableDefinition[] = [
     type: 'number', 
     defaultValue: 100, 
     source: 'plugin', 
-    pluginId: 'gamemod.survival' 
+    pluginId: 'gamemod.survival',
+    displayInPlayer: true,
+    displayOrder: 20,
   },
   { 
     id: 'hunger', 
@@ -20,7 +22,9 @@ export const SURVIVAL_VARIABLES: VariableDefinition[] = [
     type: 'number', 
     defaultValue: 100, 
     source: 'plugin', 
-    pluginId: 'gamemod.survival' 
+    pluginId: 'gamemod.survival',
+    displayInPlayer: true,
+    displayOrder: 21,
   },
   { 
     id: 'thirst', 
@@ -28,7 +32,9 @@ export const SURVIVAL_VARIABLES: VariableDefinition[] = [
     type: 'number', 
     defaultValue: 100, 
     source: 'plugin', 
-    pluginId: 'gamemod.survival' 
+    pluginId: 'gamemod.survival',
+    displayInPlayer: true,
+    displayOrder: 22,
   }
 ];
 

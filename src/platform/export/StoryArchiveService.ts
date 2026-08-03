@@ -2,17 +2,14 @@ import JSZip from 'jszip';
 import { z } from 'zod';
 import {
   FILE_FORMAT_VERSION,
-  STORY_FILE_FORMAT,
-  STORY_ZIP_FORMAT,
   WORKSPACE_BACKUP_FORMAT,
-  storyFileSchema,
-  storyZipManifestSchema,
+  assetManifestSchema,
   workspaceManifestSchema,
 } from '../../domain/story/fileFormats.ts';
-import { collectAssetIds, parseStory } from '../../domain/story/schema.ts';
+import { collectAssetIds, parseStoryDocument } from '../../domain/story/document.ts';
+import { parseStoryEditorState } from '../../domain/story/editorState.ts';
 import type { WorkspaceRepository } from '../storage/WorkspaceRepository.ts';
 import { StorageQuotaError, type AssetRecord, type SettingRecord, type StoredStory } from '../storage/types.ts';
-import type { Story } from '../../types/index.ts';
 import { sha256 } from './binary.ts';
 
 const MAX_JSON_BYTES = 50 * 1024 * 1024;
@@ -22,10 +19,7 @@ const MAX_TOTAL_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024;
 const MAX_ARCHIVE_ENTRIES = 30_000;
 
 const settingsSchema = z.array(z.object({ key: z.string().min(1), value: z.unknown() }).strict()).max(10_000);
-
-function jsonBlob(value: unknown): Blob {
-  return new Blob([JSON.stringify(value, null, 2)], { type: 'application/json;charset=utf-8' });
-}
+const storyRecordSchema = z.object({ document: z.unknown(), editorState: z.unknown() }).strict();
 
 function assertInputSize(size: number, limit: number, message: string): void {
   if (size > limit) throw new Error(message);
@@ -43,91 +37,30 @@ async function readTextEntry(zip: JSZip, path: string, maxBytes = MAX_JSON_BYTES
   return new TextDecoder().decode(bytes);
 }
 
+function assertUnique(values: string[], label: string): void {
+  if (new Set(values).size !== values.length) throw new Error(`${label}存在重复 ID`);
+}
+
 export class StoryArchiveService {
   constructor(private readonly repository: WorkspaceRepository) {}
-
-  exportStoryJson(story: Story): Blob {
-    const parsed = parseStory(story);
-    return jsonBlob({ format: STORY_FILE_FORMAT, version: FILE_FORMAT_VERSION, story: parsed });
-  }
-
-  async importStoryJson(file: Blob): Promise<StoredStory> {
-    assertInputSize(file.size, MAX_JSON_BYTES, 'JSON 文件超出大小限制');
-    const envelope = storyFileSchema.parse(JSON.parse(await file.text()));
-    if (collectAssetIds(envelope.story as Story).size > 0) {
-      throw new Error('JSON 文件不包含图片资源，请使用 ZIP 导入含图片作品');
-    }
-    return this.repository.importStory(envelope.story as Story);
-  }
-
-  async exportStoryZip(story: Story): Promise<Blob> {
-    const parsed = parseStory(story);
-    const assets = await this.requiredAssets(parsed);
-    const zip = new JSZip();
-    zip.file('story.json', JSON.stringify({
-      format: STORY_FILE_FORMAT,
-      version: FILE_FORMAT_VERSION,
-      story: parsed,
-    }, null, 2));
-
-    const manifestAssets = [];
-    for (const asset of assets) {
-      const file = `assets/${asset.hash}`;
-      zip.file(file, asset.blob);
-      manifestAssets.push({
-        id: asset.id,
-        file,
-        mimeType: asset.mimeType,
-        size: asset.size,
-        hash: asset.hash,
-        fileName: asset.fileName,
-        width: asset.width,
-        height: asset.height,
-      });
-    }
-    zip.file('manifest.json', JSON.stringify({
-      format: STORY_ZIP_FORMAT,
-      version: FILE_FORMAT_VERSION,
-      storyFile: 'story.json',
-      assets: manifestAssets,
-    }, null, 2));
-    return zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
-  }
-
-  async importStoryZip(file: Blob): Promise<StoredStory> {
-    assertInputSize(file.size, MAX_ARCHIVE_BYTES, 'ZIP 文件超出大小限制');
-    const zip = await JSZip.loadAsync(await file.arrayBuffer());
-    assertArchiveShape(zip);
-    const manifest = storyZipManifestSchema.parse(JSON.parse(await readTextEntry(zip, 'manifest.json')));
-    const storyEnvelope = storyFileSchema.parse(JSON.parse(await readTextEntry(zip, manifest.storyFile)));
-    const assets = await this.readAssets(zip, manifest.assets);
-    this.assertStoryAssets(storyEnvelope.story as Story, assets);
-    await this.assertCapacity(assets.reduce((total, asset) => total + asset.size, 0));
-    return this.repository.importStoryWithAssets(storyEnvelope.story as Story, assets);
-  }
 
   async exportWorkspace(): Promise<Blob> {
     const snapshot = await this.repository.snapshot();
     const zip = new JSZip();
     const stories = snapshot.stories.map(stored => {
       const file = `stories/${encodeURIComponent(stored.id)}.json`;
-      zip.file(file, JSON.stringify(stored.story));
-      return { id: stored.id, file, revision: stored.revision };
+      zip.file(file, JSON.stringify({ document: stored.document, editorState: stored.editorState }));
+      return { id: stored.id, file, revision: stored.revision, updatedAt: stored.updatedAt };
     });
-    const assets = snapshot.assets.map(asset => {
+    const assets = [];
+    for (const asset of snapshot.assets) {
       const file = `assets/${asset.hash}`;
-      zip.file(file, asset.blob);
-      return {
-        id: asset.id,
-        file,
-        mimeType: asset.mimeType,
-        size: asset.size,
-        hash: asset.hash,
-        fileName: asset.fileName,
-        width: asset.width,
-        height: asset.height,
-      };
-    });
+      zip.file(file, await asset.blob.arrayBuffer());
+      assets.push({
+        id: asset.id, file, mimeType: asset.mimeType, size: asset.size, hash: asset.hash,
+        fileName: asset.fileName, width: asset.width, height: asset.height,
+      });
+    }
     zip.file('settings.json', JSON.stringify(snapshot.settings));
     zip.file('manifest.json', JSON.stringify({
       format: WORKSPACE_BACKUP_FORMAT,
@@ -145,33 +78,36 @@ export class StoryArchiveService {
     const zip = await JSZip.loadAsync(await file.arrayBuffer());
     assertArchiveShape(zip);
     const manifest = workspaceManifestSchema.parse(JSON.parse(await readTextEntry(zip, 'manifest.json')));
+    assertUnique(manifest.stories.map(item => item.id), '作品清单');
+    assertUnique(manifest.stories.map(item => item.file), '作品文件');
+    assertUnique(manifest.assets.map(item => item.id), '资源清单');
+    assertUnique(manifest.assets.map(item => item.file), '资源文件');
+
     const stories: StoredStory[] = [];
     for (const item of manifest.stories) {
-      const story = parseStory(JSON.parse(await readTextEntry(zip, item.file)));
-      if (story.id !== item.id) throw new Error(`作品 ID 与清单不一致: ${item.id}`);
-      stories.push({ id: story.id, story, revision: item.revision, updatedAt: story.updatedAt });
+      const record = storyRecordSchema.parse(JSON.parse(await readTextEntry(zip, item.file)));
+      const document = parseStoryDocument(record.document);
+      const editorState = parseStoryEditorState(record.editorState);
+      if (document.id !== item.id || document.updatedAt !== item.updatedAt) throw new Error(`作品与清单不一致: ${item.id}`);
+      stories.push({ id: item.id, document, editorState, revision: item.revision, updatedAt: item.updatedAt });
     }
     const assets = await this.readAssets(zip, manifest.assets);
     const settings = settingsSchema.parse(JSON.parse(await readTextEntry(zip, manifest.settingsFile))) as SettingRecord[];
-    for (const stored of stories) this.assertStoryAssets(stored.story, assets);
+    assertUnique(settings.map(setting => setting.key), '设置');
+    this.assertAllAssets(stories, assets);
     await this.assertCapacity(assets.reduce((total, asset) => total + asset.size, 0));
     await this.repository.replaceWorkspace({ stories, assets, settings });
   }
 
-  private async requiredAssets(story: Story): Promise<AssetRecord[]> {
-    const ids = collectAssetIds(story);
-    const assets = await this.repository.getAssets(ids);
-    this.assertStoryAssets(story, assets);
-    return assets;
-  }
-
-  private assertStoryAssets(story: Story, assets: AssetRecord[]): void {
+  private assertAllAssets(stories: StoredStory[], assets: AssetRecord[]): void {
     const available = new Set(assets.map(asset => asset.id));
-    const missing = [...collectAssetIds(story)].filter(id => !available.has(id));
-    if (missing.length > 0) throw new Error(`作品缺少图片资源: ${missing.join(', ')}`);
+    for (const stored of stories) {
+      const missing = [...collectAssetIds(stored.document)].filter(id => !available.has(id));
+      if (missing.length > 0) throw new Error(`作品缺少图片资源: ${missing.join(', ')}`);
+    }
   }
 
-  private async readAssets(zip: JSZip, entries: z.infer<typeof storyZipManifestSchema>['assets']): Promise<AssetRecord[]> {
+  private async readAssets(zip: JSZip, entries: z.infer<typeof assetManifestSchema>[]): Promise<AssetRecord[]> {
     const assets: AssetRecord[] = [];
     let total = 0;
     for (const item of entries) {
@@ -184,14 +120,8 @@ export class StoryArchiveService {
       if (bytes.byteLength !== item.size) throw new Error(`图片大小校验失败: ${item.file}`);
       const blob = new Blob([new Uint8Array(bytes).buffer], { type: item.mimeType });
       const actualHash = await sha256(blob);
-      if (actualHash !== item.hash || item.id !== `asset:${actualHash}`) {
-        throw new Error(`图片哈希校验失败: ${item.file}`);
-      }
-      assets.push({
-        ...item,
-        blob,
-        createdAt: new Date().toISOString(),
-      });
+      if (actualHash !== item.hash || item.id !== `asset:${actualHash}`) throw new Error(`图片哈希校验失败: ${item.file}`);
+      assets.push({ ...item, blob, createdAt: new Date().toISOString() });
     }
     return assets;
   }

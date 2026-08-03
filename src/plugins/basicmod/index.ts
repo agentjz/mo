@@ -16,8 +16,6 @@ export {
   BlocklyPlugin
 };
 
-export * from './types.js';
-
 /**
  * 创建所有基础模组插件实例
  */

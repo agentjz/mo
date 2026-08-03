@@ -7,7 +7,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { PluginSystem } from '../plugin/PluginSystem';
 import { createBuiltinPlugins } from '../plugins/index';
 import { createFrontendPlugins, ThemeManager } from '../plugins/index';
-import { workspaceRepository } from '../platform/storage/WorkspaceRepository.ts';
+import { workspaceService } from '../application/workspace/WorkspaceService.ts';
 
 const PLUGIN_CONFIG_KEY = 'plugins.config';
 
@@ -39,7 +39,7 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
       
       // 顺序注册所有插件
       // 注意：register现在是原子操作，会同时注册plugin实例和actions manifest
-      // 这确保了manifest在任何hooks执行前就已经存在，避免竞争条件
+      // 先注册插件元数据和贡献，再恢复持久化配置。
       for (const plugin of allPlugins) {
         try {
           if (!pluginSystem.hasPlugin(plugin.metadata.id)) {
@@ -51,7 +51,7 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      const savedConfig = await workspaceRepository.getSetting<unknown>(PLUGIN_CONFIG_KEY);
+      const savedConfig = await workspaceService.getSetting<unknown>(PLUGIN_CONFIG_KEY);
       if (savedConfig) {
         try {
           await pluginSystem.importConfig(savedConfig);
@@ -78,7 +78,7 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
     if (!initialized) return;
 
     return pluginSystem.onConfigChange(() => (
-      workspaceRepository.setSetting(PLUGIN_CONFIG_KEY, pluginSystem.exportConfig())
+      workspaceService.setSetting(PLUGIN_CONFIG_KEY, pluginSystem.exportConfig())
         .catch(error => console.error('Failed to save plugin config:', error))
     ));
   }, [initialized, pluginSystem]);

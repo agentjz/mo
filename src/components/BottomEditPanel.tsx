@@ -5,7 +5,12 @@
  */
 
 import { forwardRef, useImperativeHandle, useRef, useCallback } from 'react';
-import type { StoryNode, StoryMeta, Choice, VariableDefinition } from '../types/index.ts';
+import type {
+  EditorChoice as Choice,
+  EditorStoryMeta as StoryMeta,
+  StoryFlowNode as StoryNode,
+  VariableDefinition,
+} from '../ui/editor/flowTypes.ts';
 import { useTheme } from '../contexts/ThemeContext.tsx';
 import NodeContentPanel, { type NodeContentPanelRef } from './NodeContentPanel';
 import NodeVisualPanel, { type NodeVisualPanelRef } from './NodeVisualPanel';

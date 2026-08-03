@@ -1,4 +1,5 @@
-import type { Story } from '../../types/index.ts';
+import type { StoryDocument } from '../../domain/story/document.ts';
+import type { StoryEditorState } from '../../domain/story/editorState.ts';
 import type { WorkspaceRepository } from '../../platform/storage/WorkspaceRepository.ts';
 import type { StoredStory } from '../../platform/storage/types.ts';
 import type { WorkspaceChannel } from '../../platform/storage/WorkspaceChannel.ts';
@@ -11,9 +12,15 @@ export interface SaveCoordinatorCallbacks {
   onError?: (error: unknown) => void;
 }
 
+export interface SaveSnapshot {
+  document: StoryDocument;
+  editorState: StoryEditorState;
+  revision?: number;
+}
+
 export class StorySaveCoordinator {
   private revision: number;
-  private pending: Story | null = null;
+  private pending: SaveSnapshot | null = null;
   private timer: number | null = null;
   private writePromise: Promise<void> | null = null;
   private state: SaveState = 'idle';
@@ -37,9 +44,10 @@ export class StorySaveCoordinator {
     return this.pending !== null || this.writePromise !== null;
   }
 
-  queue(story: Story): void {
+  queue(snapshot: SaveSnapshot): void {
     if (this.disposed) return;
-    this.pending = structuredClone(story);
+    if (snapshot.revision !== undefined && snapshot.revision <= this.revision) return;
+    this.pending = structuredClone(snapshot);
     this.setState('dirty');
     if (this.timer !== null) window.clearTimeout(this.timer);
     this.timer = window.setTimeout(() => {
@@ -62,7 +70,7 @@ export class StorySaveCoordinator {
         this.pending = null;
         this.setState('saving');
         try {
-          const stored = await this.repository.saveStory(snapshot, this.revision);
+          const stored = await this.repository.saveStory(snapshot.document, snapshot.editorState, this.revision, snapshot.revision);
           this.revision = stored.revision;
           this.channel.publishStoryChanged(stored.id, stored.revision);
           this.callbacks.onSaved?.(stored);

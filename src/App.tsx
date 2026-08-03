@@ -7,7 +7,7 @@ const StatementPage = lazy(() => import('./features/statement/StatementPage.tsx'
 const WorkspaceShell = lazy(() => import('./app/WorkspaceShell.tsx'));
 const Dashboard = lazy(() => import('./pages/Dashboard.tsx'));
 const Editor = lazy(() => import('./pages/Editor.tsx'));
-const PlayerRouter = lazy(() => import('./pages/PlayerRouter.tsx'));
+const PlayerPage = lazy(() => import('./pages/PlayerPage.tsx'));
 const PluginStore = lazy(() => import('./pages/PluginStore.tsx'));
 
 function App(): JSX.Element {
@@ -20,7 +20,7 @@ function App(): JSX.Element {
           <Route element={<WorkspaceShell />}>
               <Route path="/app" element={<Dashboard />} />
               <Route path="/editor/:id" element={<Editor />} />
-              <Route path="/play/:id" element={<PlayerRouter />} />
+              <Route path="/play/:id" element={<PlayerPage />} />
               <Route path="/plugins" element={<PluginStore />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
