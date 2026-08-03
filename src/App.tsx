@@ -12,7 +12,7 @@ const PluginStore = lazy(() => import('./pages/PluginStore.tsx'));
 
 function App(): JSX.Element {
   return (
-    <HashRouter>
+    <HashRouter future={{ v7_startTransition: true }}>
       <Suspense fallback={<Loading fullScreen />}>
         <Routes>
           <Route path="/" element={<LandingPage />} />

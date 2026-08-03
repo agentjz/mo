@@ -18,7 +18,7 @@
     "test:stress": "npm run build:app && playwright test tests/stress/editor.stress.spec.ts --project=chromium --max-failures=1 --retries=0",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "verify": "npm run type-check && npm run test:unit && npm run build && npm run check:boundaries",
-    "verify:full": "npm run verify && playwright test tests/e2e tests/stress --project=chromium --max-failures=1 --retries=0"
+    "verify:full": "npm run verify && playwright test tests/stress --project=chromium --max-failures=1 --retries=0 && playwright test tests/e2e --project=chromium --max-failures=1 --retries=0"
   },
   "dependencies": {
     "blockly": "^13.2.0",
@@ -28,7 +28,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-draggable": "^4.4.6",
-    "react-router-dom": "^7.18.2",
+    "react-router-dom": "6.30.4",
     "reactflow": "^11.10.4",
     "zod": "^4.4.3"
   },

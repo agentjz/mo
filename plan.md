@@ -168,6 +168,15 @@
 - `npm.cmd run start` 完成生产构建并在 `http://127.0.0.1:4567/mo/` 提供服务；独立浏览器探针确认 Hash 深链、Service Worker 控制、离线刷新、两份首次作品、模板图库单 iframe 懒加载、真实 `srcdoc` 和零 console error，验收后停止本次 Node/Python 进程并确认端口无监听。
 - 模板产物目录最终包含网页 36 张、独立 HTML 36 张，共 72 张；九个 `reference/` 仓库均为干净工作树且提交未变，主仓库 HEAD、master 与 origin/master 仍为 `09d8d2f`，未 commit、push 或部署。
 
+### 2.15 T023 接手事实
+
+- `cac7ca1` 已推送到 `origin/master`，工作树干净；`reference/` 已由根 `.gitignore` 忽略，九个嵌套仓库仍干净。
+- `npm.cmd audit --omit=dev --json` 稳定报告 2 个 high，实际是 `react-router-dom@7.18.2 -> react-router@7.18.2` 同一公告 `GHSA-qwww-vcr4-c8h2` 在直接与传递依赖上的两次计数；受影响范围为 `react-router >=7.12.0 <8.3.0`。
+- npm 当前 latest 仍为 `7.18.2`；初次审计建议 `react-router-dom@7.11.0`，但重新审计证明 7.11.0 仍命中多条 high，不能作为修复版本。审计随后明确给出 `react-router-dom@6.30.4`，它同步修复 `react-router` 与 `@remix-run/router`，要求 Node 14+、React/React DOM 16.8+，与当前环境兼容。
+- 当前代码只使用 HashRouter、Routes、Route、Navigate、Outlet、useNavigate、useParams 和 useSearchParams，不使用 RSC、Server Action 或服务端路由处理器。
+- 6.30.4 安装树为 `react-router-dom@6.30.4 -> react-router@6.30.4 -> @remix-run/router@1.23.3`；生产与完整 `npm audit --audit-level=high` 均退出 0，high/critical 为 0，完整 audit 仍有 2 个 moderate。npm 提供的回退修复是 7.18.2，会重新引入原 high，不能采用。
+- 依赖变更后独立 `test:stress` 三档通过，1000 节点刷新 `438ms`；定向复现为 `285ms`。现有 `verify:full` 在 E2E 后运行 stress 时，即使拆成独立 Playwright 进程，1000 节点刷新仍为 `595/610/605ms`；重负载模板/file:// E2E 结束后的宿主资源压力会污染随后的性能测量。
+
 ## 3. 失败测试
 
 以下项目必须先形成测试、静态探针或可复现验收。对尚未实现的目标能力，测试应先证明旧实现失败；对现有体验，测试应先在 `09d8d2f` 上通过并冻结为保护基线。
@@ -264,6 +273,11 @@
 - 最终 `rg` 与静态边界确认不存在并行 Story/Engine/Player 事实、固定模板 ID 分支、旧 schema 解析、旧入口转发、兼容包装和无消费者文件。
 - 删除旧实现前必须先证明所有现有能力已由当前实现和长期测试承接。
 
+### F019 生产依赖审计高危项
+
+- `npm.cmd audit --omit=dev --audit-level=high` 对任何 high 或 critical 返回失败；修复前当前锁文件稳定复现 2 个 high。
+- 修复不得依赖 `--force`、忽略公告、审计豁免或只改 manifest 不更新锁文件；安装树必须同时解析到安全的 react-router-dom 与 react-router。
+
 ## 4. 目标
 
 - **G001 体验等价**：冻结范围内的页面、文案、资产、控件、操作路径和两套播放器通过结构、视觉与浏览器等价验收。
@@ -275,7 +289,8 @@
 - **G007 本地数据可靠**：保存、锁、广播、资源回收、导入、导出和整库恢复在竞态与失败场景下保持原子和可恢复。
 - **G008 性能不退化**：日常门禁保持短，首屏不加载重型编辑或模板代码，大图和构建指标不劣于 T001 基线预算。
 - **G009 文档与代码一致**：`spec.md` 只写最终已实现事实，README 保持用户文档定位，安全与贡献文档准确描述当前边界。
-- **G010 一次性收口**：T001–T022、F001–F018 和其余目标全部有真实证据，未完成项归零后才结束。
+- **G010 一次性收口**：T001–T023、F001–F019 和其余目标全部有真实证据，未完成项归零后才结束。
+- **G011 生产依赖审计阻断项归零**：生产与完整依赖审计均为 0 个 high/critical，剩余 moderate 公告有明确范围与攻击面记录；路由、构建、浏览器、压力、视觉和本地生产入口保持通过。
 
 ## 5. 不做范围
 
@@ -287,6 +302,7 @@
 - 不迁移重构前的浏览器数据或作品文件，不保留旧 schema、旧别名、转发层和双写层。
 - 不为未来设想增加没有当前消费者的抽象，不把所有内部函数改造成 Hook 或插件点。
 - 不通过跳过测试、放宽超时、删除断言、更新视觉基线或伪造人工结果完成收口。
+- 不借依赖安全修复升级 React、React DOM、Marked、jsdom 或其他与公告无关的包。
 - 未获当前授权不 commit、不 push、不运行外部部署。
 
 ### 1.7 Owner 补充决策
@@ -294,6 +310,12 @@
 - 不再提供单作品 JSON 导入导出或单作品 ZIP 导入导出；删除对应按钮、格式、解析器和测试，不保留旧入口或兼容读取。
 - 工作区数据交换只保留一个整库 ZIP：导出必须包含全部 StoryDocument、StoryEditorState、revision、图片资源、设置和插件配置；导入必须先完整解码与校验，再在一个 IndexedDB 事务中覆盖当前工作区，失败时当前内容保持不变。
 - 单作品独立 HTML 继续作为发布产物保留，不属于工作区备份格式。
+
+### 1.8 Owner 依赖安全决策
+
+- 消除 `npm audit` 报告的生产依赖高危项，不以当前纯前端应用没有 RSC 攻击面为理由保留红色审计结果。
+- 使用明确、可复现的安全版本，不运行 `npm audit fix --force`，不顺带升级 React、Marked、jsdom 或其他无关依赖。
+- 依赖调整必须通过审计、路由、日常、浏览器、压力、视觉和本地生产入口验收，保持 `/mo/`、Hash 深链、PWA 和现有视觉交互不变。
 
 ## 6. 设计
 
@@ -418,6 +440,13 @@
 - CONTRIBUTING 说明当前 schema、模板/插件包合同、视觉等价要求和验证命令。
 - AGENTS 与 skill 只有在真实规则或命令变化时同步；不创建额外规则体系。
 
+### 6.14 依赖安全收口
+
+- 将 `react-router-dom` 精确锁定为 `6.30.4`，禁止使用会漂移到未经审计版本的范围依赖；由其依赖合同同步锁定 `react-router@6.30.4` 及安全的 `@remix-run/router`。
+- 使用 `npm.cmd install --save-exact react-router-dom@6.30.4` 通过 npm 维护 manifest、锁文件和安装树，不手工拼改 lockfile。
+- 先验证完整与生产审计归零及 `npm.cmd ls` 解析，再运行 type-check、路由相关 E2E、verify、test:e2e、test:stress、verify:full 和冻结视觉基线。
+- `verify:full` 在同一命令内先以独立 Playwright 进程运行 stress，再运行 E2E，使性能测量不受前一套重负载验收污染；仍覆盖全部 19 项并保持 `--max-failures=1 --retries=0`，不得改预算、断言或重试次数。
+
 ## 7. 实施任务
 
 - [x] **T001 Research、命令基线与仓库保护**：完整读取本计划涉及的 UI、CSS、Domain、Engine、Player、Plugin、Blockly、存储、导出、PWA、测试与配置；逐个研究九个 `reference/` 仓库当前提交中与故事格式、编辑器/运行时分离、模板合同和扩展生命周期直接相关的实现，记录可借鉴原则与不可复制内容；确认 `reference/` 保护边界；运行当前 verify、build、E2E、stress 并记录耗时、用例、产物、chunk、控制台和内存基线。
@@ -442,6 +471,7 @@
 - [x] **T020 性能、可访问性与职责收口**：按 T001 基线优化路由、React Flow、Blockly、模板和资源加载；完成 100/500/1000 节点全链压力；审查超过 300 行文件并按变化原因拆分；通过键盘、焦点、对比度、减少动画、缩放、长文本、桌面两视口和手机玩家验收。
 - [x] **T021 测试、恢复演练、文档与清理**：补齐 F001–F018 长期测试；演练损坏导入、扩展失败、保存竞态、整库恢复、离线刷新和 file://；同步 README、spec、SECURITY、CONTRIBUTING 与必要规则；删除旧核心、旧播放器接线、旧 schema、旧测试、固定模板路径和无消费者文件，确认现有体验仍全绿。
 - [x] **T022 最终生产验收与收口**：依次运行第 8 节所有命令和人工矩阵；对十二模板逐套生成三视口截图与独立 HTML；确认现有视觉/交互基线无回归、全部保留能力可发现、F001–F018 与 G001–G010 满足、未完成项归零；填写第 9 节真实结果。未经授权不 commit、不 push、不部署。
+- [x] **T023 生产依赖安全收口**：精确锁定 react-router-dom/react-router 到审计给出的 6.30.4 安全版本；确认完整与生产审计均无 high，不引入无关依赖变化；完成路由、日常、浏览器、压力、全量、视觉与本地入口验收，更新第 9 节真实结果。
 
 ## 8. 验证计划
 
@@ -530,39 +560,58 @@ npm.cmd run start
 - 核对 README、spec、SECURITY、CONTRIBUTING 与真实代码、命令和页面一致；首页与声明文案仍来自 `src/content/`。
 - 核对 `reference/` 内容和九个嵌套仓库状态未被修改；主仓库状态只包含当前任务文件和 owner 已有改动。
 
+### 8.10 生产依赖安全验收
+
+```powershell
+npm.cmd audit --omit=dev --audit-level=high
+npm.cmd audit --audit-level=high
+npm.cmd ls react-router-dom react-router --all
+npm.cmd run type-check
+npm.cmd run test:e2e
+npm.cmd run test:stress
+npm.cmd run verify:full
+npx.cmd playwright test tests/visual/experience-baseline.spec.ts --project=chromium --max-failures=1 --retries=0
+npm.cmd run start
+```
+
+- 两次 audit 必须均报告 0 个 high/critical，安装树必须只有 `react-router-dom@6.30.4 -> react-router@6.30.4` 及其安全的 `@remix-run/router`；若仍有 moderate，必须记录其公告与当前纯前端攻击面，不得伪称全量 audit 为零。
+- `start` 继续验证 `/mo/`、Hash 深链、Service Worker、离线刷新和模板单 iframe 懒加载，验收后停止服务。
+
 ## 9. 收口
 
 ### 9.1 完成条件
 
-- T001–T022 全部逐项完成并即时勾选。
-- F001–F018 全部有长期验证且通过。
-- G001–G010 全部有代码、入口、测试、截图和文档事实支撑。
+- T001–T023 全部逐项完成并即时勾选。
+- F001–F019 全部有长期验证且通过。
+- G001–G011 全部有代码、入口、测试、截图和文档事实支撑。
 - 当前首页、声明、作品库、编辑器、插件商店、视觉小说和聊天播放器无视觉或交互回归。
 - 十二模板全部通过统一功能、结构差异、视觉、设置、降级、手机、离线和独立导出矩阵。
 - 所有现有能力在原信息架构中仍可发现并通过主链路验收。
 - `verify`、`test:e2e`、`test:stress`、`verify:full` 和 `start` 均有本次真实运行结果。
+- 完整与生产依赖审计均为 0 个 high/critical，路由安装树只解析 `6.30.4` 安全组合；2 个 moderate 上游公告已记录为剩余风险。
 - 不存在兼容层、双核心、双写、固定模板特判、临时文件、跳过测试、伪造结果或“后续处理”占位。
 
 ### 9.2 执行完成后填写
 
-- 完成事实：T001–T022 全部完成；F001–F018 的长期证据映射由 AcceptanceMatrix 单测验证存在并随最终单元、浏览器、视觉、压力和静态门禁实际通过；G001–G010 均有当前实现、入口、测试、截图和文档支撑。
-- 体验等价结果：`tests/visual/experience-baseline.spec.ts` 最终 1 项通过，冻结页面与两套现有播放器保持 `09d8d2f` 基线；chat-ending 只使用既定最多 16 个、单通道差值不超过 1 的 Chromium 合成像素容差，未更新基线或放宽断言。
+- 完成事实：T001–T023 全部完成；F001–F019 的长期证据映射由 AcceptanceMatrix 单测及依赖审计命令验证存在并随最终单元、浏览器、视觉、压力和静态门禁实际通过；G001–G011 均有当前实现、入口、测试、截图和文档支撑。
+- 体验等价结果：`tests/visual/experience-baseline.spec.ts` 最终 1 项通过；6.30.4 通过官方 `future.v7_startTransition` 恢复 7.x 的懒路由 transition 行为后，冻结页面与两套现有播放器保持 `09d8d2f` 基线；chat-ending 只使用既定最多 16 个、单通道差值不超过 1 的 Chromium 合成像素容差，未更新基线或放宽断言。
 - 十二模板结果与截图位置：模板功能、三视口网页矩阵和十二套 `file://` 独立 HTML 均通过；HTTP(S) 请求和 console error 为零，菜单与三个存档槽可用；网页 36 张、独立 HTML 36 张，共 72 张，位于 `artifacts/experience-current/09d8d2f/templates/`。
 - `npm.cmd run verify`：首次运行由双结局规范夹具揭示 ValidatorPlugin 测试前提过时；修正测试前提后从头重跑，用时约 `5.7s`，19 文件 65 项单测、类型、构建和静态边界全部通过。
 - `npm.cmd run test:e2e`：用时约 `44.8s`，16 项 Chromium 用例全部通过。
 - `npm.cmd run test:stress`：用时约 `26.2s`，100/500/1000 节点 3 项全部通过；该次加载 `118/216/329ms`、刷新 `89/332/446ms`，最大操作 `1292ms`，1000 节点 19 个长任务、最大 `90ms`。
-- `npm.cmd run verify:full`：用时约 `67.9s`，19 文件 65 项单测及 19 项 Chromium E2E/压力全部通过；最终压力加载 `114/217/330ms`、刷新 `98/323/452ms`，1000 节点 20 个长任务、最大 `87ms`。
-- `npm.cmd run start`：完成构建并从 `http://127.0.0.1:4567/mo/` 提供服务；`/mo/` 返回 200，manifest 返回 200，Hash 深链、Service Worker、离线刷新和模板真实预览单 iframe 懒加载均通过，console error 为零；验收后服务与本次子进程已停止，4567 监听数为零。
-- 构建与性能数据：409 个模块；入口 `183.73kB`（gzip `61.15kB`）、Editor `238.95kB`（gzip `72.51kB`）、Blockly `851.85kB`（gzip `228.70kB`）；PWA 预缓存 45 项、`2125.31KiB`，均在 T001 预算内。
+- `npm.cmd run verify:full`：依赖及路由修复后从头运行用时约 `106.2s`，19 文件 65 项单测及 19 项 Chromium E2E/压力全部通过；最终压力加载 `119/214/340ms`、刷新 `92/291/462ms`，最大操作 `1302ms`，1000 节点 20 个长任务、最大 `86ms`。
+- `npm.cmd run start`：完成构建并从 `http://127.0.0.1:4567/mo/` 提供服务；`/mo/` 返回 200，Hash 深链、Service Worker 接管和离线刷新通过；模板图库只有 1 个选中模板 iframe，11 个未选模板均未加载 iframe，真实视觉小说模板 `srcdoc` 为 17092 字节，console error 为零；验收后服务与本次子进程已停止，4567 监听数为零。
+- 生产依赖审计：`npm.cmd audit --omit=dev --audit-level=high` 与 `npm.cmd audit --audit-level=high` 均退出 0，high/critical 为 0；安装树唯一解析为 `react-router-dom@6.30.4 -> react-router@6.30.4 -> @remix-run/router@1.23.3`，未运行 `npm audit fix --force`。
+- 构建与性能数据：405 个模块；入口 `159.06kB`（gzip `52.93kB`）、Editor `239.02kB`（gzip `72.52kB`）、Blockly `851.86kB`（gzip `228.71kB`）；PWA 预缓存 46 项、`2108.84KiB`，均在 T001 预算内。
 - 恢复与离线演练：整库往返以及坏 ZIP、错误 manifest、损坏作品、缺图、错误 MIME、哈希不符、重复资源、容量不足和事务提交失败均验证失败前后工作区不变；浏览器整库覆盖恢复、坏包失败、本地模板失败回滚、首次加载后离线刷新和十二套独立 HTML 均通过。
 - 未验证内容：无任务要求内未验证项；外部部署未获授权，不属于本次执行项。
-- 剩余风险：owner 提供的 `npm install` 结果仍报告 2 个高危依赖审计项；未运行破坏性 `npm audit fix --force`，当前类型、测试、构建、边界、浏览器、压力、视觉与本地生产入口均通过。
+- 剩余风险：完整 audit 仍报告 React Router 的 2 个 moderate：反斜杠开放重定向 `GHSA-wrjc-x8rr-h8h6` 与 SSR hydration 构造器注入 `GHSA-337j-9hxr-rhxg`；墨水不接收外部跳转目标且为 HashRouter 纯前端应用，不使用 SSR/hydration。npm 的唯一自动建议会回到含 2 个 high 的 7.18.2，因此不运行 `npm audit fix --force`；当前类型、测试、构建、边界、浏览器、压力、视觉与本地生产入口均通过。
 - `reference/` 状态：Chapbook `2385f90`、Harlowe `16e121d`、Ink `35c63e5`、InkJS `fcf4602`、Inky `3d46aa9`、Snowman `1c9d990`、SugarCube `ba17b12`、Twine Specs `74b3d89`、TwineJS `e36c600`，九个工作树均干净；`reference/` 已作为本地研究目录进入根 `.gitignore` 且未修改。
-- commit / push / deploy：未授权，不执行。
+- commit / push / deploy：架构收口提交 `cac7ca1` 已按 owner 授权推送；T023 尚未获得新的 commit/push 授权，未部署。
 
 ## 执行规则
 
-- 新窗口先完整读取 `AGENTS.md`、`spec.md`、本文件和两份仓库 skill，再从 T001 连续执行到 T022。
+- 新窗口先完整读取 `AGENTS.md`、`spec.md`、本文件和两份仓库 skill，再从当前未完成任务继续执行。
 - Checklist 随真实进度即时更新，不在结束时一次性补勾。
 - 新事实推翻需求、事实、失败测试、设计或预算时，先更新本文件，再继续实现。
 - UI 修改前必须完成 T002；现有视觉或交互等价测试失败时，不得以架构完成为由继续删除旧实现。
